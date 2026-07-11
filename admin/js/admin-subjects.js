@@ -1,6 +1,4 @@
 let allSubjects = [];
-let subjectsPage = 1;
-const SUBJECTS_PAGE_SIZE = 8;
 
 async function initAdminSubjects(content) {
   content.innerHTML = `
@@ -25,15 +23,14 @@ async function initAdminSubjects(content) {
           <i class="bi bi-plus-lg me-1"></i>Add Subject
         </button>
       </div>
-      <div class="table-responsive">
-        <table class="table table-hover align-middle">
-          <thead><tr><th>Code</th><th>Subject Name</th><th>Units</th><th>Year</th><th>Semester</th><th>A.Y.</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+      <div class="table-responsive" style="max-height: 520px; overflow-y: auto;">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="sticky-top bg-white"><tr><th>Code</th><th>Subject Name</th><th>Units</th><th>Year</th><th>Semester</th><th>A.Y.</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
           <tbody id="subjects-tbody"></tbody>
         </table>
       </div>
-      <div class="d-flex justify-content-between align-items-center">
+      <div class="mt-2">
         <span class="text-muted small" id="subjects-count"></span>
-        <div id="subjects-pagination"></div>
       </div>
     </div>
 
@@ -104,10 +101,10 @@ async function initAdminSubjects(content) {
     </div>`;
 
   document.getElementById("subject-form").addEventListener("submit", saveSubject);
-  document.getElementById("search-input").addEventListener("input", debounce(() => { subjectsPage = 1; renderSubjectsTable(); }, 250));
-  document.getElementById("filter-year").addEventListener("change", () => { subjectsPage = 1; renderSubjectsTable(); });
-  document.getElementById("filter-semester").addEventListener("change", () => { subjectsPage = 1; renderSubjectsTable(); });
-  document.getElementById("filter-status").addEventListener("change", () => { subjectsPage = 1; renderSubjectsTable(); });
+  document.getElementById("search-input").addEventListener("input", debounce(renderSubjectsTable, 250));
+  document.getElementById("filter-year").addEventListener("change", renderSubjectsTable);
+  document.getElementById("filter-semester").addEventListener("change", renderSubjectsTable);
+  document.getElementById("filter-status").addEventListener("change", renderSubjectsTable);
 
   await loadSubjects();
 }
@@ -132,10 +129,8 @@ function renderSubjectsTable() {
     return matchesSearch && matchesYear && matchesSem && matchesStatus;
   });
 
-  const { pageItems, totalPages, total } = paginate(filtered, subjectsPage, SUBJECTS_PAGE_SIZE);
-
-  document.getElementById("subjects-tbody").innerHTML = pageItems.length
-    ? pageItems
+  document.getElementById("subjects-tbody").innerHTML = filtered.length
+    ? filtered
         .map(
           (s) => `
     <tr>
@@ -155,11 +150,7 @@ function renderSubjectsTable() {
         .join("")
     : `<tr><td colspan="8" class="text-center text-muted py-4">No subjects found.</td></tr>`;
 
-  document.getElementById("subjects-count").textContent = `${total} subject(s)`;
-  renderPagination(document.getElementById("subjects-pagination"), subjectsPage, totalPages, (p) => {
-    subjectsPage = p;
-    renderSubjectsTable();
-  });
+  document.getElementById("subjects-count").textContent = `${filtered.length} subject(s)`;
 }
 
 function openSubjectModal(id) {
