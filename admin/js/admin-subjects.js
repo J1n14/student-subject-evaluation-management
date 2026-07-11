@@ -23,9 +23,9 @@ async function initAdminSubjects(content) {
           <i class="bi bi-plus-lg me-1"></i>Add Subject
         </button>
       </div>
-      <div class="table-responsive" style="max-height: 520px; overflow-y: auto;">
-        <table class="table table-hover align-middle mb-0">
-          <thead class="sticky-top bg-white"><tr><th>Code</th><th>Subject Name</th><th>Units</th><th>Year</th><th>Semester</th><th>A.Y.</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+      <div class="table-responsive" style="max-height: calc(100vh - 260px); min-height: 300px; overflow-y: auto;">
+        <table class="table table-hover table-sm align-middle mb-0">
+          <thead class="sticky-top bg-white"><tr><th>Code</th><th>Subject Name</th><th>Units</th><th class="text-nowrap">Year</th><th class="text-nowrap">Semester</th><th class="text-nowrap">A.Y.</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
           <tbody id="subjects-tbody"></tbody>
         </table>
       </div>
@@ -134,12 +134,12 @@ function renderSubjectsTable() {
         .map(
           (s) => `
     <tr>
-      <td>${escapeHtml(s.subjectCode)}</td>
+      <td class="text-nowrap">${escapeHtml(s.subjectCode)}</td>
       <td>${escapeHtml(s.subjectName)}</td>
       <td>${escapeHtml(s.units)}</td>
-      <td>${escapeHtml(s.yearLevel)}</td>
-      <td>${escapeHtml(s.semester)}</td>
-      <td>${escapeHtml(s.academicYear)}</td>
+      <td class="text-nowrap">${escapeHtml(s.yearLevel)}</td>
+      <td class="text-nowrap">${escapeHtml(s.semester)}</td>
+      <td class="text-nowrap">${escapeHtml(s.academicYear)}</td>
       <td>${statusBadge(s.status || "Active")}</td>
       <td class="text-end">
         <button class="btn btn-sm btn-outline-primary" onclick="openSubjectModal('${s.id}')" data-bs-toggle="modal" data-bs-target="#subjectModal"><i class="bi bi-pencil"></i></button>
