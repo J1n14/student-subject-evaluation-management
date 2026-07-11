@@ -1,0 +1,82 @@
+rules_version = '2';
+
+// Firestore Security Rules — Student Subject Evaluation Management System
+//
+// Roles are stored in users/{uid}.role ('admin' | 'student').
+// Students are additionally linked to their students/{studentId} record via
+// users/{uid}.studentId. Admins have full access everywhere; students may
+// only read their own data and can never write evaluation, subject, or
+// assignment records.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function myProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        myProfile().role == 'admin';
+    }
+
+    function isStudent() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        myProfile().role == 'student';
+    }
+
+    function myStudentId() {
+      return myProfile().studentId;
+    }
+
+    // ---------------- users ----------------
+    // Students never self-register - Admins provision every account (Auth +
+    // this profile doc) directly, so only Admins may create/update/delete.
+    // A signed-in user may still read their own profile (used by requireRole()).
+    match /users/{userId} {
+      allow read: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ---------------- students ----------------
+    // Only Admins manage student records; a student may read their own.
+    match /students/{studentId} {
+      allow read: if isAdmin() || (isStudent() && studentId == myStudentId());
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ---------------- subjects ----------------
+    // Subject catalog is not sensitive; any signed-in user may read it,
+    // but only Admins may create/edit/delete.
+    match /subjects/{subjectId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ---------------- studentSubjects (assignments) ----------------
+    match /studentSubjects/{assignmentId} {
+      allow read: if isAdmin() || (isStudent() && resource.data.studentId == myStudentId());
+      allow write: if isAdmin();
+    }
+
+    // ---------------- evaluations ----------------
+    match /evaluations/{evaluationId} {
+      allow read: if isAdmin() || (isStudent() && resource.data.studentId == myStudentId());
+      allow write: if isAdmin();
+    }
+
+    // ---------------- activityLogs ----------------
+    // Any signed-in user may write a log entry for themselves; only Admins
+    // may read the log (used on the Admin dashboard).
+    match /activityLogs/{logId} {
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+  }
+}

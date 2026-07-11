@@ -1,0 +1,183 @@
+:root {
+  --brand: #2f5d9f;
+  --brand-dark: #1f4479;
+  --bg-soft: #f4f6fb;
+}
+
+body {
+  background-color: var(--bg-soft);
+  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+/* ---------- Auth pages ---------- */
+.auth-wrapper {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-dark) 100%);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  border: none;
+  border-radius: 14px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.25);
+}
+
+.auth-card .card-header {
+  background: var(--brand);
+  color: #fff;
+  border-radius: 14px 14px 0 0 !important;
+  text-align: center;
+  padding: 1.75rem 1.5rem 1.25rem;
+}
+
+.role-select-card {
+  border: none;
+  border-radius: 16px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
+}
+
+.role-select-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.18);
+}
+
+/* ---------- App shell ---------- */
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 250px;
+  flex-shrink: 0;
+  background: var(--brand-dark);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem 0;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 1.1rem;
+  padding: 0 1.25rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  margin-bottom: 0.5rem;
+}
+
+.sidebar .nav-link {
+  color: rgba(255, 255, 255, 0.85);
+  padding: 0.65rem 1.25rem;
+  border-left: 3px solid transparent;
+}
+
+.sidebar .nav-link:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.sidebar .nav-link.active {
+  background: rgba(255, 255, 255, 0.15);
+  border-left-color: #ffc107;
+  color: #fff;
+  font-weight: 600;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 1rem 1.25rem 0;
+}
+
+.main-area {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  background: #fff;
+  padding: 0.9rem 1.5rem;
+  border-bottom: 1px solid #e3e6ee;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.content-area {
+  padding: 1.5rem;
+  flex: 1;
+}
+
+/* ---------- Dashboard cards ---------- */
+.summary-card {
+  border: none;
+  border-radius: 12px;
+  color: #fff;
+  padding: 1.25rem;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+}
+
+.summary-card .icon {
+  font-size: 1.8rem;
+  opacity: 0.85;
+}
+
+.summary-card h3 {
+  font-weight: 700;
+  margin-bottom: 0;
+}
+
+.bg-card-1 { background: linear-gradient(135deg, #2f5d9f, #1f4479); }
+.bg-card-2 { background: linear-gradient(135deg, #2e9e6a, #1c7449); }
+.bg-card-3 { background: linear-gradient(135deg, #e2a53a, #c17d15); }
+.bg-card-4 { background: linear-gradient(135deg, #7a5fd1, #5638a8); }
+.bg-card-5 { background: linear-gradient(135deg, #d1556b, #a52d43); }
+
+/* ---------- Misc ---------- */
+.table-responsive-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1.25rem;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05);
+}
+
+.section-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1.25rem;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05);
+  margin-bottom: 1.25rem;
+}
+
+@media (max-width: 991.98px) {
+  .sidebar {
+    position: fixed;
+    left: -260px;
+    z-index: 1050;
+    transition: left 0.2s ease;
+  }
+  .sidebar.show {
+    left: 0;
+  }
+}
+
+/* ---------- Print (Reports) ---------- */
+@media print {
+  .no-print { display: none !important; }
+  .app-shell { display: block; }
+  .sidebar, .topbar { display: none !important; }
+  .content-area { padding: 0; }
+  body { background: #fff; }
+}
