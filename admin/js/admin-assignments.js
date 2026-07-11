@@ -2,28 +2,16 @@ let assignStudents = [];
 let assignSubjects = [];
 let currentAssignments = []; // studentSubjects docs for the selected student
 
-const YEAR_ORDER = ["1st Year", "2nd Year", "3rd Year", "4th Year"];
 const SEMESTER_ORDER = ["1st Semester", "2nd Semester", "Midterm", "Summer"];
 
-function groupSubjectsForPicker(subjects) {
-  const sorted = [...subjects].sort((a, b) => {
-    const yearDiff = YEAR_ORDER.indexOf(a.yearLevel) - YEAR_ORDER.indexOf(b.yearLevel);
-    if (yearDiff !== 0) return yearDiff;
-    const semDiff = SEMESTER_ORDER.indexOf(a.semester) - SEMESTER_ORDER.indexOf(b.semester);
-    if (semDiff !== 0) return semDiff;
-    return (a.subjectCode || "").localeCompare(b.subjectCode || "");
-  });
-
-  const groups = [];
-  for (const sub of sorted) {
-    let group = groups.find((g) => g.yearLevel === sub.yearLevel && g.semester === sub.semester);
-    if (!group) {
-      group = { yearLevel: sub.yearLevel, semester: sub.semester, subjects: [] };
-      groups.push(group);
-    }
-    group.subjects.push(sub);
-  }
-  return groups;
+function subjectsForStudentYear(yearLevel) {
+  return assignSubjects
+    .filter((s) => s.yearLevel === yearLevel)
+    .sort((a, b) => {
+      const semDiff = SEMESTER_ORDER.indexOf(a.semester) - SEMESTER_ORDER.indexOf(b.semester);
+      if (semDiff !== 0) return semDiff;
+      return (a.subjectCode || "").localeCompare(b.subjectCode || "");
+    });
 }
 
 async function initAdminAssignments(content) {
@@ -85,7 +73,10 @@ async function selectStudentForAssignment(studentId) {
   const snap = await db.collection("studentSubjects").where("studentId", "==", studentId).get();
   currentAssignments = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   const assignedIds = new Set(currentAssignments.map((a) => a.subjectId));
-  const groups = groupSubjectsForPicker(assignSubjects);
+  const yearSubjects = subjectsForStudentYear(student.yearLevel);
+  const semesters = [...new Set(yearSubjects.map((s) => s.semester))].sort(
+    (a, b) => SEMESTER_ORDER.indexOf(a) - SEMESTER_ORDER.indexOf(b)
+  );
 
   panel.innerHTML = `
     <div class="d-flex justify-content-between align-items-start mb-3">
@@ -96,44 +87,36 @@ async function selectStudentForAssignment(studentId) {
       ${statusBadge(student.status || "Pending")}
     </div>
     <form id="assignment-form">
-      <label class="form-label">Select subjects to assign</label>
-      <input type="text" class="form-control form-control-sm mb-2" id="subject-picker-search" placeholder="Filter by code or name..." />
-      <div class="accordion mb-3" id="subjectAccordion" style="max-height:400px; overflow-y:auto;">
-        ${
-          groups.length
-            ? groups
-                .map((g, i) => {
-                  const expanded = g.yearLevel === student.yearLevel;
-                  const groupCount = g.subjects.filter((s) => assignedIds.has(s.id)).length;
-                  return `
-          <div class="accordion-item" data-subject-group data-default-expanded="${expanded}">
-            <h2 class="accordion-header">
-              <button class="accordion-button ${expanded ? "" : "collapsed"} py-2" type="button" data-bs-toggle="collapse" data-bs-target="#grp-${i}">
-                ${escapeHtml(g.yearLevel)} &ndash; ${escapeHtml(g.semester)}
-                <span class="badge bg-secondary ms-2">${g.subjects.length}</span>
-                ${groupCount ? `<span class="badge bg-success ms-1">${groupCount} assigned</span>` : ""}
-              </button>
-            </h2>
-            <div id="grp-${i}" class="accordion-collapse collapse ${expanded ? "show" : ""}" data-bs-parent="#subjectAccordion">
-              <div class="accordion-body py-2">
-                ${g.subjects
-                  .map(
-                    (sub) => `
-                <div class="form-check" data-subject-row data-search="${escapeHtml((sub.subjectCode + " " + sub.subjectName).toLowerCase())}">
-                  <input class="form-check-input" type="checkbox" value="${sub.id}" id="sub-${sub.id}" ${assignedIds.has(sub.id) ? "checked" : ""}>
-                  <label class="form-check-label" for="sub-${sub.id}">
-                    ${escapeHtml(sub.subjectCode)} - ${escapeHtml(sub.subjectName)} (${sub.units} units)
-                  </label>
-                </div>`
-                  )
-                  .join("")}
-              </div>
-            </div>
-          </div>`;
-                })
-                .join("")
-            : `<div class="text-muted small p-2">No active subjects. Add subjects first.</div>`
-        }
+      <label class="form-label">Select subjects to assign (${escapeHtml(student.yearLevel)})</label>
+      <div class="d-flex gap-2 mb-2">
+        <input type="text" class="form-control form-control-sm" id="subject-picker-search" placeholder="Filter by code or name..." />
+        <select class="form-select form-select-sm" style="max-width:160px" id="subject-picker-semester">
+          <option value="">All Semesters</option>
+          ${semesters.map((sem) => `<option value="${escapeHtml(sem)}">${escapeHtml(sem)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="table-responsive border rounded mb-3" style="max-height:400px; overflow-y:auto;">
+        <table class="table table-sm table-hover align-middle mb-0" id="subject-picker-table">
+          <thead class="sticky-top bg-white"><tr><th></th><th>Code</th><th>Subject Name</th><th>Units</th><th class="text-nowrap">Semester</th></tr></thead>
+          <tbody>
+            ${
+              yearSubjects.length
+                ? yearSubjects
+                    .map(
+                      (sub) => `
+              <tr data-subject-row data-semester="${escapeHtml(sub.semester)}" data-search="${escapeHtml((sub.subjectCode + " " + sub.subjectName).toLowerCase())}">
+                <td><input class="form-check-input" type="checkbox" value="${sub.id}" id="sub-${sub.id}" ${assignedIds.has(sub.id) ? "checked" : ""}></td>
+                <td><label for="sub-${sub.id}">${escapeHtml(sub.subjectCode)}</label></td>
+                <td><label for="sub-${sub.id}">${escapeHtml(sub.subjectName)}</label></td>
+                <td>${sub.units}</td>
+                <td class="text-nowrap">${escapeHtml(sub.semester)}</td>
+              </tr>`
+                    )
+                    .join("")
+                : `<tr><td colspan="5" class="text-center text-muted py-3">No active subjects for ${escapeHtml(student.yearLevel)}.</td></tr>`
+            }
+          </tbody>
+        </table>
       </div>
       <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Save Assignment</button>
     </form>
@@ -143,24 +126,16 @@ async function selectStudentForAssignment(studentId) {
 
   document.getElementById("assignment-form").addEventListener("submit", (e) => saveAssignments(e, studentId));
   document.getElementById("subject-picker-search").addEventListener("input", debounce(filterSubjectPicker, 150));
+  document.getElementById("subject-picker-semester").addEventListener("change", filterSubjectPicker);
 }
 
 function filterSubjectPicker() {
   const query = document.getElementById("subject-picker-search").value.trim().toLowerCase();
-  document.querySelectorAll("#subjectAccordion [data-subject-group]").forEach((groupEl) => {
-    let visibleInGroup = 0;
-    groupEl.querySelectorAll("[data-subject-row]").forEach((row) => {
-      const match = !query || row.dataset.search.includes(query);
-      row.classList.toggle("d-none", !match);
-      if (match) visibleInGroup++;
-    });
-    groupEl.classList.toggle("d-none", visibleInGroup === 0);
-
-    const collapseEl = groupEl.querySelector(".accordion-collapse");
-    const buttonEl = groupEl.querySelector(".accordion-button");
-    const shouldExpand = query ? visibleInGroup > 0 : groupEl.dataset.defaultExpanded === "true";
-    collapseEl.classList.toggle("show", shouldExpand);
-    buttonEl.classList.toggle("collapsed", !shouldExpand);
+  const semFilter = document.getElementById("subject-picker-semester").value;
+  document.querySelectorAll("#subject-picker-table [data-subject-row]").forEach((row) => {
+    const matchesSearch = !query || row.dataset.search.includes(query);
+    const matchesSem = !semFilter || row.dataset.semester === semFilter;
+    row.classList.toggle("d-none", !(matchesSearch && matchesSem));
   });
 }
 
