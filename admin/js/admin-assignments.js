@@ -2,6 +2,30 @@ let assignStudents = [];
 let assignSubjects = [];
 let currentAssignments = []; // studentSubjects docs for the selected student
 
+const YEAR_ORDER = ["1st Year", "2nd Year", "3rd Year", "4th Year"];
+const SEMESTER_ORDER = ["1st Semester", "2nd Semester", "Midterm", "Summer"];
+
+function groupSubjectsForPicker(subjects) {
+  const sorted = [...subjects].sort((a, b) => {
+    const yearDiff = YEAR_ORDER.indexOf(a.yearLevel) - YEAR_ORDER.indexOf(b.yearLevel);
+    if (yearDiff !== 0) return yearDiff;
+    const semDiff = SEMESTER_ORDER.indexOf(a.semester) - SEMESTER_ORDER.indexOf(b.semester);
+    if (semDiff !== 0) return semDiff;
+    return (a.subjectCode || "").localeCompare(b.subjectCode || "");
+  });
+
+  const groups = [];
+  for (const sub of sorted) {
+    let group = groups.find((g) => g.yearLevel === sub.yearLevel && g.semester === sub.semester);
+    if (!group) {
+      group = { yearLevel: sub.yearLevel, semester: sub.semester, subjects: [] };
+      groups.push(group);
+    }
+    group.subjects.push(sub);
+  }
+  return groups;
+}
+
 async function initAdminAssignments(content) {
   content.innerHTML = `
     <div class="row g-3">
@@ -61,6 +85,7 @@ async function selectStudentForAssignment(studentId) {
   const snap = await db.collection("studentSubjects").where("studentId", "==", studentId).get();
   currentAssignments = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   const assignedIds = new Set(currentAssignments.map((a) => a.subjectId));
+  const groups = groupSubjectsForPicker(assignSubjects);
 
   panel.innerHTML = `
     <div class="d-flex justify-content-between align-items-start mb-3">
@@ -72,21 +97,42 @@ async function selectStudentForAssignment(studentId) {
     </div>
     <form id="assignment-form">
       <label class="form-label">Select subjects to assign</label>
-      <div class="border rounded p-2 mb-3" style="max-height:320px; overflow-y:auto;">
+      <input type="text" class="form-control form-control-sm mb-2" id="subject-picker-search" placeholder="Filter by code or name..." />
+      <div class="accordion mb-3" id="subjectAccordion" style="max-height:400px; overflow-y:auto;">
         ${
-          assignSubjects.length
-            ? assignSubjects
-                .map(
-                  (sub) => `
-          <div class="form-check">
-            <input class="form-check-input" type="checkbox" value="${sub.id}" id="sub-${sub.id}" ${assignedIds.has(sub.id) ? "checked" : ""}>
-            <label class="form-check-label" for="sub-${sub.id}">
-              ${escapeHtml(sub.subjectCode)} - ${escapeHtml(sub.subjectName)} (${sub.units} units, ${escapeHtml(sub.yearLevel)} ${escapeHtml(sub.semester)})
-            </label>
-          </div>`
-                )
+          groups.length
+            ? groups
+                .map((g, i) => {
+                  const expanded = g.yearLevel === student.yearLevel;
+                  const groupCount = g.subjects.filter((s) => assignedIds.has(s.id)).length;
+                  return `
+          <div class="accordion-item" data-subject-group data-default-expanded="${expanded}">
+            <h2 class="accordion-header">
+              <button class="accordion-button ${expanded ? "" : "collapsed"} py-2" type="button" data-bs-toggle="collapse" data-bs-target="#grp-${i}">
+                ${escapeHtml(g.yearLevel)} &ndash; ${escapeHtml(g.semester)}
+                <span class="badge bg-secondary ms-2">${g.subjects.length}</span>
+                ${groupCount ? `<span class="badge bg-success ms-1">${groupCount} assigned</span>` : ""}
+              </button>
+            </h2>
+            <div id="grp-${i}" class="accordion-collapse collapse ${expanded ? "show" : ""}" data-bs-parent="#subjectAccordion">
+              <div class="accordion-body py-2">
+                ${g.subjects
+                  .map(
+                    (sub) => `
+                <div class="form-check" data-subject-row data-search="${escapeHtml((sub.subjectCode + " " + sub.subjectName).toLowerCase())}">
+                  <input class="form-check-input" type="checkbox" value="${sub.id}" id="sub-${sub.id}" ${assignedIds.has(sub.id) ? "checked" : ""}>
+                  <label class="form-check-label" for="sub-${sub.id}">
+                    ${escapeHtml(sub.subjectCode)} - ${escapeHtml(sub.subjectName)} (${sub.units} units)
+                  </label>
+                </div>`
+                  )
+                  .join("")}
+              </div>
+            </div>
+          </div>`;
+                })
                 .join("")
-            : `<div class="text-muted small">No active subjects. Add subjects first.</div>`
+            : `<div class="text-muted small p-2">No active subjects. Add subjects first.</div>`
         }
       </div>
       <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Save Assignment</button>
@@ -96,6 +142,26 @@ async function selectStudentForAssignment(studentId) {
     <div id="current-assignments-list">${renderCurrentAssignmentsList(assignedIds)}</div>`;
 
   document.getElementById("assignment-form").addEventListener("submit", (e) => saveAssignments(e, studentId));
+  document.getElementById("subject-picker-search").addEventListener("input", debounce(filterSubjectPicker, 150));
+}
+
+function filterSubjectPicker() {
+  const query = document.getElementById("subject-picker-search").value.trim().toLowerCase();
+  document.querySelectorAll("#subjectAccordion [data-subject-group]").forEach((groupEl) => {
+    let visibleInGroup = 0;
+    groupEl.querySelectorAll("[data-subject-row]").forEach((row) => {
+      const match = !query || row.dataset.search.includes(query);
+      row.classList.toggle("d-none", !match);
+      if (match) visibleInGroup++;
+    });
+    groupEl.classList.toggle("d-none", visibleInGroup === 0);
+
+    const collapseEl = groupEl.querySelector(".accordion-collapse");
+    const buttonEl = groupEl.querySelector(".accordion-button");
+    const shouldExpand = query ? visibleInGroup > 0 : groupEl.dataset.defaultExpanded === "true";
+    collapseEl.classList.toggle("show", shouldExpand);
+    buttonEl.classList.toggle("collapsed", !shouldExpand);
+  });
 }
 
 function renderCurrentAssignmentsList(assignedIds) {
