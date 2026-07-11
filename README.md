@@ -6,30 +6,44 @@ open the HTML files directly or deploy with Firebase Hosting.
 
 ## 1. File overview
 
-All files are flat in this folder (no subfolders) so the app can be opened
-or hosted as-is.
+Files are organized by portal, with each portal split into `html/` and `js/`,
+plus a `shared/` folder for code used by both. No build step - the app can
+be opened or hosted as-is.
+
+```
+index.html            Student login (also the site's landing page)
+admin-login.html       Admin login (not linked from index.html - go to it directly)
+admin/
+  html/                admin-dashboard, admin-students, admin-subjects,
+                       admin-assignments, admin-evaluations, admin-reports
+  js/                  matching .js for each page above
+student/
+  html/                student-dashboard, student-subjects, student-evaluations
+  js/                  matching .js for each page above
+shared/
+  js/                  firebase-config.js, auth.js, layout.js, utils.js
+  css/                 style.css
+firestore.rules, firestore.indexes.json   Firestore security rules + composite indexes
+storage.rules          Optional Storage rules for profile pictures
+firebase.json          Hosting/deploy config
+```
 
 | File | Purpose |
 |---|---|
-| `index.html` | Student login (also the site's landing page) |
-| `admin-login.html` | Admin login (not linked from `index.html` - go to it directly) |
-| `admin-dashboard.html` / `.js` | Admin dashboard: summary cards, recent activity, chart |
-| `admin-students.html` / `.js` | Student CRUD, search, filter, pagination |
-| `admin-subjects.html` / `.js` | Subject CRUD |
-| `admin-assignments.html` / `.js` | Assign/remove subjects per student |
-| `admin-evaluations.html` / `.js` | Per-subject evaluation entry, duplicate-safe |
-| `admin-reports.html` / `.js` | Printable reports (summary / assignments / evaluations) |
-| `student-dashboard.html` / `.js` | Student welcome + status overview |
-| `student-subjects.html` / `.js` | Read-only assigned subjects (real-time) |
-| `student-evaluations.html` / `.js` | Read-only evaluation results (real-time) |
-| `firebase-config.js` | Firebase SDK init — **edit this with your project keys** |
-| `auth.js` | Login / registration / route guards |
-| `layout.js` | Shared sidebar/topbar for both portals |
-| `utils.js` | Toasts, formatting, pagination, activity logs, auto-status logic |
-| `style.css` | All styling, including print styles for Reports |
-| `firestore.rules`, `firestore.indexes.json` | Firestore security rules + required composite indexes |
-| `storage.rules` | Optional Storage rules for profile pictures |
-| `firebase.json` | Hosting/deploy config |
+| `shared/js/firebase-config.js` | Firebase SDK init — **edit this with your project keys** |
+| `shared/js/auth.js` | Login / route guards |
+| `shared/js/layout.js` | Shared sidebar/topbar for both portals |
+| `shared/js/utils.js` | Toasts, formatting, pagination, activity logs, auto-status logic |
+| `shared/css/style.css` | All styling, including print styles for Reports |
+| `admin/html/admin-dashboard.html` / `admin/js/admin-dashboard.js` | Admin dashboard: summary cards, recent activity, chart |
+| `admin/html/admin-students.html` / `admin/js/admin-students.js` | Student CRUD, search, filter, pagination |
+| `admin/html/admin-subjects.html` / `admin/js/admin-subjects.js` | Subject CRUD |
+| `admin/html/admin-assignments.html` / `admin/js/admin-assignments.js` | Assign/remove subjects per student |
+| `admin/html/admin-evaluations.html` / `admin/js/admin-evaluations.js` | Per-subject evaluation entry, duplicate-safe |
+| `admin/html/admin-reports.html` / `admin/js/admin-reports.js` | Printable reports (summary / assignments / evaluations) |
+| `student/html/student-dashboard.html` / `student/js/student-dashboard.js` | Student welcome + status overview |
+| `student/html/student-subjects.html` / `student/js/student-subjects.js` | Read-only assigned subjects (real-time) |
+| `student/html/student-evaluations.html` / `student/js/student-evaluations.js` | Read-only evaluation results (real-time) |
 
 ## 2. Firebase project setup
 

@@ -1,12 +1,3 @@
-/**
- * Authentication + route-protection helpers.
- * Requires firebase-config.js loaded first.
- *
- * Data model reminder (see README.md):
- *   users/{uid} = { role: 'admin' | 'student', email, fullName, studentId, createdAt, updatedAt }
- */
-
-// Resolve the users/{uid} profile doc for the currently signed-in user.
 async function getCurrentUserProfile() {
   const user = auth.currentUser;
   if (!user) return null;
@@ -14,16 +5,9 @@ async function getCurrentUserProfile() {
   return snap.exists ? { uid: user.uid, ...snap.data() } : null;
 }
 
-/**
- * Guards a page so only a signed-in user with the given role can view it.
- * Redirects to the appropriate login page otherwise.
- * Call this at the top of every protected page's inline <script>.
- *
- * @param {'admin'|'student'} requiredRole
- * @param {(profile: object) => void} onReady - called once with the verified profile
- */
+// Called at the top of every protected admin/html or student/html page.
 function requireRole(requiredRole, onReady) {
-  const loginPage = requiredRole === "admin" ? "admin-login.html" : "index.html";
+  const loginPage = requiredRole === "admin" ? "../../admin-login.html" : "../../index.html";
   auth.onAuthStateChanged(async (user) => {
     if (!user) {
       window.location.href = loginPage;
@@ -45,7 +29,6 @@ function requireRole(requiredRole, onReady) {
   });
 }
 
-// ---------- Admin login ----------
 async function adminLogin(email, password) {
   const cred = await auth.signInWithEmailAndPassword(email, password);
   const snap = await db.collection("users").doc(cred.user.uid).get();
@@ -57,7 +40,6 @@ async function adminLogin(email, password) {
   return snap.data();
 }
 
-// ---------- Student login ----------
 async function studentLogin(email, password) {
   const cred = await auth.signInWithEmailAndPassword(email, password);
   const snap = await db.collection("users").doc(cred.user.uid).get();

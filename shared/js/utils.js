@@ -1,9 +1,5 @@
-/**
- * Shared utility helpers used across Admin and Student modules.
- * Requires: db, auth, serverTimestamp (from firebase-config.js) to be loaded first.
- */
+// Requires db, auth, serverTimestamp (from firebase-config.js) loaded first.
 
-// ---------- Toast notifications ----------
 function ensureToastContainer() {
   let el = document.getElementById("toast-container");
   if (!el) {
@@ -39,7 +35,6 @@ function showError(err, fallback = "Something went wrong.") {
   showToast(err && err.message ? err.message : fallback, "error");
 }
 
-// ---------- Formatting ----------
 function formatDate(ts) {
   if (!ts) return "—";
   const d = ts.toDate ? ts.toDate() : new Date(ts);
@@ -84,7 +79,6 @@ function debounce(fn, delay = 300) {
   };
 }
 
-// ---------- Activity logs ----------
 async function logActivity(action) {
   try {
     const user = auth.currentUser;
@@ -100,7 +94,6 @@ async function logActivity(action) {
   }
 }
 
-// ---------- Simple client-side pagination ----------
 function paginate(items, page, pageSize) {
   const start = (page - 1) * pageSize;
   return {
@@ -125,20 +118,14 @@ function renderPagination(containerEl, currentPage, totalPages, onPageChange) {
   containerEl.appendChild(ul);
 }
 
-// ---------- Form validation helper ----------
 function validateForm(formEl) {
   formEl.classList.add("was-validated");
   return formEl.checkValidity();
 }
 
-// ---------- Automatic evaluation status ----------
-/**
- * Recomputes a student's Evaluated/Pending/Needs Review status based on
- * their assigned subjects vs. saved evaluations, then writes it back.
- *   - All assigned subjects have an evaluation  -> "Evaluated"
- *   - Some assigned subjects missing evaluation -> "Pending"
- *   - Evaluations exist for subjects not currently assigned (data drift) -> "Needs Review"
- */
+// Evaluated: every assigned subject has an evaluation.
+// Pending: some assigned subject is missing one.
+// Needs Review: an evaluation exists for a subject no longer assigned (data drift).
 async function recomputeStudentStatus(studentId) {
   const [assignSnap, evalSnap] = await Promise.all([
     db.collection("studentSubjects").where("studentId", "==", studentId).get(),

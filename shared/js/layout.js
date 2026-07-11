@@ -77,9 +77,9 @@ function renderLayout(navItems, active, title, profile, redirectOnLogout) {
 }
 
 function renderAdminLayout(active, profile) {
-  return renderLayout(ADMIN_NAV, active, "Admin Portal", profile, "admin-login.html");
+  return renderLayout(ADMIN_NAV, active, "Admin Portal", profile, "../../admin-login.html");
 }
 
 function renderStudentLayout(active, profile) {
-  return renderLayout(STUDENT_NAV, active, "Student Portal", profile, "index.html");
+  return renderLayout(STUDENT_NAV, active, "Student Portal", profile, "../../index.html");
 }
