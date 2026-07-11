@@ -23,9 +23,14 @@ student/
 shared/
   js/                  firebase-config.js, auth.js, layout.js, utils.js
   css/                 style.css
-firestore.rules, firestore.indexes.json   Firestore security rules + composite indexes
-storage.rules          Optional Storage rules for profile pictures
-firebase.json          Hosting/deploy config
+firebase/
+  firestore.rules, firestore.indexes.json   Firestore security rules + composite indexes
+  storage.rules        Optional Storage rules for profile pictures
+  create-admin.js      One-time script: creates the first Admin account
+  serviceAccountKey.json   Admin SDK credential (gitignored, not committed)
+firebase.json          Hosting/deploy config (stays at project root - required
+                       by the Firebase CLI)
+package.json           Node deps for firebase/create-admin.js (firebase-admin)
 ```
 
 | File | Purpose |
@@ -51,7 +56,7 @@ firebase.json          Hosting/deploy config
 2. **Build → Authentication → Sign-in method** → enable **Email/Password**.
 3. **Build → Firestore Database** → **Create database** (start in production mode).
 4. **Project settings → General → Your apps → Add app → Web (`</>`)** → copy the config object.
-5. Open `firebase-config.js` in this folder and replace the placeholder values:
+5. Open `shared/js/firebase-config.js` and replace the placeholder values:
 
 ```js
 const firebaseConfig = {
@@ -73,26 +78,30 @@ firebase init   # select this folder, choose existing project
 firebase deploy --only firestore:rules,firestore:indexes,storage
 ```
 
-   (Or paste the contents of `firestore.rules` / `storage.rules` directly into
-   Console → Firestore → Rules / Storage → Rules.)
+   (Or paste the contents of `firebase/firestore.rules` / `firebase/storage.rules`
+   directly into Console → Firestore → Rules / Storage → Rules.)
 
 ## 3. Bootstrapping your first Admin account
 
 Because Admins have full data access, the client app deliberately **cannot**
 self-register an Admin (only `role: 'student'` accounts can be created from
-the browser — see `firestore.rules`). Create the first Admin manually, once:
+the browser — see `firebase/firestore.rules`). Use the one-time
+`firebase/create-admin.js` script instead:
 
-1. **Authentication → Users → Add user** — enter your admin email + password.
-2. **Firestore Database → Start collection → `users`** → document ID = the
-   new user's **UID** (copy it from the Authentication tab) → add fields:
-   - `role` (string) = `admin`
-   - `email` (string) = same email
-   - `fullName` (string) = your name
-   - `createdAt`, `updatedAt` (timestamp) = now
-3. Open `admin-login.html` and sign in.
+1. Firebase Console → gear icon → **Project settings → Service accounts** →
+   **Generate new private key** → save the downloaded file as
+   `firebase/serviceAccountKey.json` (already gitignored - never commit it).
+2. `npm install` (installs `firebase-admin`, used only by this script).
+3. Run it:
+   ```bash
+   node firebase/create-admin.js admin@example.com "SomePassword123" "Your Name"
+   ```
+   This creates the Firebase Auth user and writes `users/{uid}` with
+   `role: 'admin'` in one step.
+4. Open `admin-login.html` and sign in.
 
 Any further Admin accounts can be created the same way, or you can extend
-`admin-students.html` with an "Add Admin" flow later.
+`admin/js/admin-students.js` with an "Add Admin" flow later.
 
 ## 4. How students get accounts
 
@@ -154,7 +163,7 @@ Notes:
   are written with `{ merge: true }`, so re-saving an evaluation **updates**
   the existing record instead of creating a duplicate.
 - `students/{id}.status` is recalculated automatically after every
-  assignment or evaluation change (`recomputeStudentStatus()` in `utils.js`):
+  assignment or evaluation change (`recomputeStudentStatus()` in `shared/js/utils.js`):
   - **Evaluated** — every assigned subject has a saved evaluation.
   - **Pending** — at least one assigned subject has no evaluation yet.
   - **Needs Review** — an evaluation exists for a subject that is no longer
@@ -169,4 +178,4 @@ Notes:
   never write to subjects, assignments, or evaluations.
 - `activityLogs` can be written by any signed-in user for themselves, but
   only read by Admins (used for the "Recent Student Logins" dashboard card).
-- Full details in `firestore.rules`.
+- Full details in `firebase/firestore.rules`.
