@@ -3,26 +3,22 @@ async function initAdminDashboard(content) {
     <div class="row g-3 mb-2" id="summary-cards"></div>
     <div class="row g-3 mt-1">
       <div class="col-lg-6">
-        <div class="table-responsive-card">
+        <div class="table-responsive-card mb-3">
           <h6 class="mb-3"><i class="bi bi-clipboard-check me-1"></i>Recent Evaluations</h6>
           <div id="recent-evaluations"><div class="text-muted small">Loading...</div></div>
         </div>
+        <div class="table-responsive-card">
+          <h6 class="mb-3"><i class="bi bi-pie-chart me-1"></i>Evaluation Status</h6>
+          <div style="position: relative; height: 180px;">
+            <canvas id="statusChart"></canvas>
+          </div>
+        </div>
       </div>
       <div class="col-lg-6">
-        <div class="table-responsive-card">
+        <div class="table-responsive-card mb-3">
           <h6 class="mb-3"><i class="bi bi-box-arrow-in-right me-1"></i>Recent Student Logins</h6>
           <div id="recent-logins"><div class="text-muted small">Loading...</div></div>
         </div>
-      </div>
-    </div>
-    <div class="row g-3 mt-1">
-      <div class="col-lg-6">
-        <div class="table-responsive-card">
-          <h6 class="mb-3"><i class="bi bi-pie-chart me-1"></i>Evaluation Status</h6>
-          <canvas id="statusChart" height="180"></canvas>
-        </div>
-      </div>
-      <div class="col-lg-6">
         <div class="table-responsive-card">
           <h6 class="mb-3"><i class="bi bi-bar-chart me-1"></i>Statistics</h6>
           <ul class="list-group list-group-flush" id="stats-list"></ul>
@@ -101,7 +97,7 @@ function renderStatusChart(evaluated, pending) {
       labels: ["Evaluated", "Pending"],
       datasets: [{ data: [evaluated, pending], backgroundColor: ["#2e9e6a", "#e2a53a"] }]
     },
-    options: { plugins: { legend: { position: "bottom" } } }
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } }
   });
 }
 
