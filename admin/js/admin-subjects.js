@@ -8,9 +8,13 @@ async function initAdminSubjects(content) {
       <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
         <div class="d-flex gap-2 flex-wrap">
           <input type="text" class="form-control" style="width:220px" placeholder="Search code or name" id="search-input" />
+          <select class="form-select" style="width:130px" id="filter-year">
+            <option value="">All Years</option>
+            <option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option>
+          </select>
           <select class="form-select" style="width:150px" id="filter-semester">
             <option value="">All Semesters</option>
-            <option>1st Semester</option><option>2nd Semester</option><option>Summer</option>
+            <option>1st Semester</option><option>2nd Semester</option><option>Midterm</option><option>Summer</option>
           </select>
           <select class="form-select" style="width:140px" id="filter-status">
             <option value="">All Status</option>
@@ -23,7 +27,7 @@ async function initAdminSubjects(content) {
       </div>
       <div class="table-responsive">
         <table class="table table-hover align-middle">
-          <thead><tr><th>Code</th><th>Subject Name</th><th>Units</th><th>Semester</th><th>A.Y.</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+          <thead><tr><th>Code</th><th>Subject Name</th><th>Units</th><th>Year</th><th>Semester</th><th>A.Y.</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
           <tbody id="subjects-tbody"></tbody>
         </table>
       </div>
@@ -59,11 +63,19 @@ async function initAdminSubjects(content) {
                   <input type="number" min="1" max="10" class="form-control" id="units" required />
                   <div class="invalid-feedback">Required.</div>
                 </div>
-                <div class="col-8 mb-3">
+                <div class="col-4 mb-3">
+                  <label class="form-label">Year Level</label>
+                  <select class="form-select" id="yearLevel" required>
+                    <option value="">Select</option>
+                    <option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option>
+                  </select>
+                  <div class="invalid-feedback">Required.</div>
+                </div>
+                <div class="col-4 mb-3">
                   <label class="form-label">Semester</label>
                   <select class="form-select" id="semester" required>
                     <option value="">Select</option>
-                    <option>1st Semester</option><option>2nd Semester</option><option>Summer</option>
+                    <option>1st Semester</option><option>2nd Semester</option><option>Midterm</option><option>Summer</option>
                   </select>
                   <div class="invalid-feedback">Required.</div>
                 </div>
@@ -93,6 +105,7 @@ async function initAdminSubjects(content) {
 
   document.getElementById("subject-form").addEventListener("submit", saveSubject);
   document.getElementById("search-input").addEventListener("input", debounce(() => { subjectsPage = 1; renderSubjectsTable(); }, 250));
+  document.getElementById("filter-year").addEventListener("change", () => { subjectsPage = 1; renderSubjectsTable(); });
   document.getElementById("filter-semester").addEventListener("change", () => { subjectsPage = 1; renderSubjectsTable(); });
   document.getElementById("filter-status").addEventListener("change", () => { subjectsPage = 1; renderSubjectsTable(); });
 
@@ -107,14 +120,16 @@ async function loadSubjects() {
 
 function renderSubjectsTable() {
   const search = document.getElementById("search-input").value.toLowerCase();
+  const yearFilter = document.getElementById("filter-year").value;
   const semFilter = document.getElementById("filter-semester").value;
   const statusFilter = document.getElementById("filter-status").value;
 
   let filtered = allSubjects.filter((s) => {
     const matchesSearch = !search || (s.subjectCode || "").toLowerCase().includes(search) || (s.subjectName || "").toLowerCase().includes(search);
+    const matchesYear = !yearFilter || s.yearLevel === yearFilter;
     const matchesSem = !semFilter || s.semester === semFilter;
     const matchesStatus = !statusFilter || s.status === statusFilter;
-    return matchesSearch && matchesSem && matchesStatus;
+    return matchesSearch && matchesYear && matchesSem && matchesStatus;
   });
 
   const { pageItems, totalPages, total } = paginate(filtered, subjectsPage, SUBJECTS_PAGE_SIZE);
@@ -127,6 +142,7 @@ function renderSubjectsTable() {
       <td>${escapeHtml(s.subjectCode)}</td>
       <td>${escapeHtml(s.subjectName)}</td>
       <td>${escapeHtml(s.units)}</td>
+      <td>${escapeHtml(s.yearLevel)}</td>
       <td>${escapeHtml(s.semester)}</td>
       <td>${escapeHtml(s.academicYear)}</td>
       <td>${statusBadge(s.status || "Active")}</td>
@@ -137,7 +153,7 @@ function renderSubjectsTable() {
     </tr>`
         )
         .join("")
-    : `<tr><td colspan="7" class="text-center text-muted py-4">No subjects found.</td></tr>`;
+    : `<tr><td colspan="8" class="text-center text-muted py-4">No subjects found.</td></tr>`;
 
   document.getElementById("subjects-count").textContent = `${total} subject(s)`;
   renderPagination(document.getElementById("subjects-pagination"), subjectsPage, totalPages, (p) => {
@@ -159,6 +175,7 @@ function openSubjectModal(id) {
     document.getElementById("subjectCode").value = s.subjectCode || "";
     document.getElementById("subjectName").value = s.subjectName || "";
     document.getElementById("units").value = s.units || "";
+    document.getElementById("yearLevel").value = s.yearLevel || "";
     document.getElementById("semester").value = s.semester || "";
     document.getElementById("academicYear").value = s.academicYear || "";
     document.getElementById("status").value = s.status || "Active";
@@ -181,6 +198,7 @@ async function saveSubject(e) {
       subjectCode: document.getElementById("subjectCode").value.trim(),
       subjectName: document.getElementById("subjectName").value.trim(),
       units: Number(document.getElementById("units").value),
+      yearLevel: document.getElementById("yearLevel").value,
       semester: document.getElementById("semester").value,
       academicYear: document.getElementById("academicYear").value.trim(),
       status: document.getElementById("status").value,

@@ -81,7 +81,7 @@ async function selectStudentForAssignment(studentId) {
           <div class="form-check">
             <input class="form-check-input" type="checkbox" value="${sub.id}" id="sub-${sub.id}" ${assignedIds.has(sub.id) ? "checked" : ""}>
             <label class="form-check-label" for="sub-${sub.id}">
-              ${escapeHtml(sub.subjectCode)} - ${escapeHtml(sub.subjectName)} (${sub.units} units, ${escapeHtml(sub.semester)})
+              ${escapeHtml(sub.subjectCode)} - ${escapeHtml(sub.subjectName)} (${sub.units} units, ${escapeHtml(sub.yearLevel)} ${escapeHtml(sub.semester)})
             </label>
           </div>`
                 )

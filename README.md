@@ -152,7 +152,7 @@ Your app will be live at `https://YOUR_PROJECT_ID.web.app`.
 ```
 users/{uid}            { role, email, fullName, studentId, createdAt, updatedAt }
 students/{studentId}   { fullName, email, course, yearLevel, status, uid, createdAt, updatedAt }
-subjects/{subjectId}   { subjectCode, subjectName, units, semester, academicYear, status, createdAt, updatedAt }
+subjects/{subjectId}   { subjectCode, subjectName, units, yearLevel, semester, academicYear, status, createdAt, updatedAt }
 studentSubjects/{id}   { studentId, subjectId, assignedAt }
 evaluations/{studentId_subjectId}  { studentId, subjectId, status, remarks, evaluatedBy, evaluatedAt }
 activityLogs/{id}      { userId, email, action, timestamp }
