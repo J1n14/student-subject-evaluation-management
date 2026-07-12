@@ -50,7 +50,8 @@ async function generateReport() {
 
   const header = `
     <div class="report-header text-center mb-4">
-      <h4 class="mb-0">Student Subject Evaluation Management System</h4>
+      <h4 class="mb-0">Nexus Integrative University</h4>
+      <div class="text-muted">Student Subject Evaluation Management System</div>
       <div class="text-muted">Official System Report</div>
       <hr/>
       <div class="d-flex justify-content-between small text-muted">

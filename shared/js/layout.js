@@ -32,8 +32,11 @@ function buildSidebar(navItems, active, title) {
     .join("");
   return `
     <div class="sidebar-brand">
-      <i class="bi bi-mortarboard-fill"></i>
-      <span>${title}</span>
+      <img src="../../image/Logo%20transparent.png" alt="Nexus Integrative University logo" class="sidebar-logo" />
+      <div class="sidebar-brand-text">
+        <strong>Nexus Integrative University</strong>
+        <span>${title}</span>
+      </div>
     </div>
     <ul class="nav flex-column">${items}</ul>
     <div class="sidebar-footer">
