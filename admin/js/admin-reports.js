@@ -76,9 +76,9 @@ async function generateReport() {
           .join("")}
       </div>
       <table class="table table-bordered table-sm">
-        <thead><tr><th>Student ID</th><th>Full Name</th><th>Course</th><th>Year</th><th>Status</th></tr></thead>
+        <thead><tr><th>Student ID</th><th>Full Name</th><th>Track</th><th>Year</th><th>Status</th></tr></thead>
         <tbody>${students
-          .map((s) => `<tr><td>${escapeHtml(s.id)}</td><td>${escapeHtml(s.fullName)}</td><td>${escapeHtml(s.course)}</td><td>${escapeHtml(s.yearLevel)}</td><td>${escapeHtml(s.status || "Pending")}</td></tr>`)
+          .map((s) => `<tr><td>${escapeHtml(s.id)}</td><td>${escapeHtml(s.fullName)}</td><td>${escapeHtml(s.track)}</td><td>${escapeHtml(s.yearLevel)}</td><td>${escapeHtml(s.status || "Pending")}</td></tr>`)
           .join("")}</tbody>
       </table>`;
   } else if (type === "assignments") {

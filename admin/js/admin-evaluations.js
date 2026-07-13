@@ -42,7 +42,7 @@ function renderEvalStudentList() {
           <span>${escapeHtml(s.fullName)}</span>
           ${statusBadge(s.status || "Pending")}
         </div>
-        <div class="small text-muted">${escapeHtml(s.id)} &middot; ${escapeHtml(s.course)}</div>
+        <div class="small text-muted">${escapeHtml(s.id)} &middot; ${escapeHtml(s.track)}</div>
       </button>`
     )
     .join("") || `<div class="text-muted small p-2">No students found.</div>`;
@@ -74,7 +74,7 @@ async function selectStudentForEvaluation(studentId) {
     <div class="d-flex justify-content-between align-items-start mb-3">
       <div>
         <h5 class="mb-0">${escapeHtml(student.fullName)}</h5>
-        <div class="text-muted small">${escapeHtml(student.id)} &middot; ${escapeHtml(student.course)} &middot; ${escapeHtml(student.yearLevel)}</div>
+        <div class="text-muted small">${escapeHtml(student.id)} &middot; ${escapeHtml(student.track)} &middot; ${escapeHtml(student.yearLevel)}</div>
       </div>
       ${statusBadge(student.status || "Pending")}
     </div>

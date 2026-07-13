@@ -17,7 +17,7 @@ async function initStudentDashboard(content, profile) {
   content.innerHTML = `
     <div class="section-card">
       <h4>Welcome, ${escapeHtml(profile.fullName || student.fullName || profile.email)}! 👋</h4>
-      <p class="text-muted mb-0">${escapeHtml(student.course || "")} ${student.yearLevel ? "&middot; " + escapeHtml(student.yearLevel) : ""}</p>
+      <p class="text-muted mb-0">${escapeHtml(student.track || "")} ${student.yearLevel ? "&middot; " + escapeHtml(student.yearLevel) : ""}</p>
     </div>
     <div class="row g-3 mt-1">
       <div class="col-6 col-lg-3">

@@ -106,8 +106,8 @@ Any further Admin accounts can be created the same way, or you can extend
 ## 4. How students get accounts
 
 Students never self-register. An Admin creates the full account in one step
-via **Admin → Students → Add Student** (Student ID, Full Name, Email, Course,
-Year Level):
+via **Admin → Students → Add Student** (Student ID, Full Name, Email, Source
+College, Curriculum, Track, Year Level):
 
 1. The client creates the Firebase Auth account immediately - **email** as
    entered, and **password = the Student ID** (must be at least 6 characters,
@@ -151,7 +151,7 @@ Your app will be live at `https://YOUR_PROJECT_ID.web.app`.
 
 ```
 users/{uid}            { role, email, fullName, studentId, createdAt, updatedAt }
-students/{studentId}   { fullName, email, course, yearLevel, status, uid, createdAt, updatedAt }
+students/{studentId}   { fullName, email, college, curriculum, track, yearLevel, status, uid, createdAt, updatedAt }
 subjects/{subjectId}   { subjectCode, subjectName, units, yearLevel, semester, academicYear, status, createdAt, updatedAt }
 studentSubjects/{id}   { studentId, subjectId, assignedAt }
 evaluations/{studentId_subjectId}  { studentId, subjectId, status, remarks, evaluatedBy, evaluatedAt }

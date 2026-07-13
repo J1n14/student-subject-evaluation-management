@@ -8,8 +8,11 @@ async function initAdminStudents(content) {
       <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
         <div class="d-flex gap-2 flex-wrap">
           <input type="text" class="form-control" style="width:220px" placeholder="Search name, ID, or email" id="search-input" />
-          <select class="form-select" style="width:160px" id="filter-course">
-            <option value="">All Courses</option>
+          <select class="form-select" style="width:190px" id="filter-track">
+            <option value="">All Tracks</option>
+            <option>Network Technology</option>
+            <option>Service Management</option>
+            <option>Business Analytics</option>
           </select>
           <select class="form-select" style="width:150px" id="filter-status">
             <option value="">All Status</option>
@@ -24,7 +27,7 @@ async function initAdminStudents(content) {
       <div class="table-responsive">
         <table class="table table-hover align-middle">
           <thead>
-            <tr><th>Student ID</th><th>Full Name</th><th>Email</th><th>Course</th><th>Year</th><th>Status</th><th class="text-end">Actions</th></tr>
+            <tr><th>Student ID</th><th>Full Name</th><th>Email</th><th>Track</th><th>Year</th><th>Status</th><th class="text-end">Actions</th></tr>
           </thead>
           <tbody id="students-tbody"></tbody>
         </table>
@@ -64,9 +67,30 @@ async function initAdminStudents(content) {
               </div>
               <div class="row">
                 <div class="col-6 mb-3">
-                  <label class="form-label">Course</label>
-                  <input type="text" class="form-control" id="course" placeholder="e.g. BSIT" required />
-                  <div class="invalid-feedback">Course is required.</div>
+                  <label class="form-label">Source College</label>
+                  <input type="text" class="form-control" id="college" placeholder="e.g. College of Computer Studies" required />
+                  <div class="invalid-feedback">Source college is required.</div>
+                </div>
+                <div class="col-6 mb-3">
+                  <label class="form-label">Curriculum</label>
+                  <select class="form-select" id="curriculum" required>
+                    <option value="">Select</option>
+                    <option value="Old">Old Curriculum</option>
+                    <option value="New">New Curriculum</option>
+                  </select>
+                  <div class="invalid-feedback">Select a curriculum.</div>
+                </div>
+              </div>
+              <div class="row">
+                <div class="col-6 mb-3">
+                  <label class="form-label">Track</label>
+                  <select class="form-select" id="track" required>
+                    <option value="">Select</option>
+                    <option>Network Technology</option>
+                    <option>Service Management</option>
+                    <option>Business Analytics</option>
+                  </select>
+                  <div class="invalid-feedback">Select a track.</div>
                 </div>
                 <div class="col-6 mb-3">
                   <label class="form-label">Year Level</label>
@@ -107,7 +131,7 @@ async function initAdminStudents(content) {
 
   document.getElementById("student-form").addEventListener("submit", saveStudent);
   document.getElementById("search-input").addEventListener("input", debounce(() => { studentsPage = 1; renderStudentsTable(); }, 250));
-  document.getElementById("filter-course").addEventListener("change", () => { studentsPage = 1; renderStudentsTable(); });
+  document.getElementById("filter-track").addEventListener("change", () => { studentsPage = 1; renderStudentsTable(); });
   document.getElementById("filter-status").addEventListener("change", () => { studentsPage = 1; renderStudentsTable(); });
 
   await loadStudents();
@@ -116,21 +140,12 @@ async function initAdminStudents(content) {
 async function loadStudents() {
   const snap = await db.collection("students").orderBy("createdAt", "desc").get();
   allStudents = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  populateCourseFilter();
   renderStudentsTable();
-}
-
-function populateCourseFilter() {
-  const courses = [...new Set(allStudents.map((s) => s.course).filter(Boolean))].sort();
-  const sel = document.getElementById("filter-course");
-  const current = sel.value;
-  sel.innerHTML = `<option value="">All Courses</option>` + courses.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
-  sel.value = current;
 }
 
 function renderStudentsTable() {
   const search = document.getElementById("search-input").value.toLowerCase();
-  const courseFilter = document.getElementById("filter-course").value;
+  const trackFilter = document.getElementById("filter-track").value;
   const statusFilter = document.getElementById("filter-status").value;
 
   let filtered = allStudents.filter((s) => {
@@ -139,9 +154,9 @@ function renderStudentsTable() {
       (s.fullName || "").toLowerCase().includes(search) ||
       (s.id || "").toLowerCase().includes(search) ||
       (s.email || "").toLowerCase().includes(search);
-    const matchesCourse = !courseFilter || s.course === courseFilter;
+    const matchesTrack = !trackFilter || s.track === trackFilter;
     const matchesStatus = !statusFilter || s.status === statusFilter;
-    return matchesSearch && matchesCourse && matchesStatus;
+    return matchesSearch && matchesTrack && matchesStatus;
   });
 
   const { pageItems, totalPages, total } = paginate(filtered, studentsPage, STUDENTS_PAGE_SIZE);
@@ -154,7 +169,7 @@ function renderStudentsTable() {
       <td>${escapeHtml(s.id)}</td>
       <td>${escapeHtml(s.fullName)}</td>
       <td>${escapeHtml(s.email)}</td>
-      <td>${escapeHtml(s.course)}</td>
+      <td>${escapeHtml(s.track)}</td>
       <td>${escapeHtml(s.yearLevel)}</td>
       <td>${statusBadge(s.status || "Pending")}</td>
       <td class="text-end">
@@ -192,7 +207,9 @@ function openStudentModal(id) {
     document.getElementById("studentIdHelp").style.display = "none"; // editing never touches the login password
     document.getElementById("fullName").value = s.fullName || "";
     document.getElementById("email").value = s.email || "";
-    document.getElementById("course").value = s.course || "";
+    document.getElementById("college").value = s.college || "";
+    document.getElementById("curriculum").value = s.curriculum || "";
+    document.getElementById("track").value = s.track || "";
     document.getElementById("yearLevel").value = s.yearLevel || "";
     document.getElementById("status").value = s.status || "Pending";
     document.getElementById("statusFieldWrap").style.display = "block";
@@ -227,7 +244,9 @@ async function saveStudent(e) {
     const data = {
       fullName: document.getElementById("fullName").value.trim(),
       email: document.getElementById("email").value.trim(),
-      course: document.getElementById("course").value.trim(),
+      college: document.getElementById("college").value.trim(),
+      curriculum: document.getElementById("curriculum").value,
+      track: document.getElementById("track").value,
       yearLevel: document.getElementById("yearLevel").value,
       updatedAt: serverTimestamp()
     };
@@ -277,7 +296,9 @@ function viewStudent(id) {
       <dt class="col-5">Student ID</dt><dd class="col-7">${escapeHtml(s.id)}</dd>
       <dt class="col-5">Full Name</dt><dd class="col-7">${escapeHtml(s.fullName)}</dd>
       <dt class="col-5">Email</dt><dd class="col-7">${escapeHtml(s.email)}</dd>
-      <dt class="col-5">Course</dt><dd class="col-7">${escapeHtml(s.course)}</dd>
+      <dt class="col-5">Source College</dt><dd class="col-7">${escapeHtml(s.college)}</dd>
+      <dt class="col-5">Curriculum</dt><dd class="col-7">${escapeHtml(s.curriculum)}</dd>
+      <dt class="col-5">Track</dt><dd class="col-7">${escapeHtml(s.track)}</dd>
       <dt class="col-5">Year Level</dt><dd class="col-7">${escapeHtml(s.yearLevel)}</dd>
       <dt class="col-5">Status</dt><dd class="col-7">${statusBadge(s.status || "Pending")}</dd>
       <dt class="col-5">Created At</dt><dd class="col-7">${formatDateTime(s.createdAt)}</dd>
