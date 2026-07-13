@@ -185,7 +185,7 @@ function renderStudentsTable() {
       <td>${escapeHtml(s.email)}</td>
       <td>${escapeOrDash(s.college)}</td>
       <td>${escapeOrDash(s.course)}</td>
-      <td>${s.curriculum ? escapeHtml(s.curriculum) + " Curriculum" : "-"}</td>
+      <td>${escapeOrDash(s.curriculum)}</td>
       <td>${escapeOrDash(s.track)}</td>
       <td>${escapeHtml(s.yearLevel)}</td>
       <td>${statusBadge(s.status || "Pending")}</td>
@@ -324,7 +324,7 @@ function viewStudent(id) {
       <dt class="col-5">Email</dt><dd class="col-7">${escapeHtml(s.email)}</dd>
       <dt class="col-5">Source College</dt><dd class="col-7">${escapeOrDash(s.college)}</dd>
       <dt class="col-5">Course</dt><dd class="col-7">${escapeOrDash(s.course)}</dd>
-      <dt class="col-5">Curriculum</dt><dd class="col-7">${s.curriculum ? escapeHtml(s.curriculum) + " Curriculum" : "-"}</dd>
+      <dt class="col-5">Curriculum</dt><dd class="col-7">${escapeOrDash(s.curriculum)}</dd>
       <dt class="col-5">Track</dt><dd class="col-7">${escapeOrDash(s.track)}</dd>
       <dt class="col-5">Year Level</dt><dd class="col-7">${escapeHtml(s.yearLevel)}</dd>
       <dt class="col-5">Status</dt><dd class="col-7">${statusBadge(s.status || "Pending")}</dd>

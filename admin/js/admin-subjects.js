@@ -187,7 +187,7 @@ function renderSubjectsTable() {
       <td>${escapeHtml(s.units)}</td>
       <td class="text-nowrap">${escapeHtml(s.yearLevel)}</td>
       <td class="text-nowrap text-center">${escapeOrDash(s.track)}</td>
-      <td class="text-nowrap text-center">${s.curriculum ? escapeHtml(s.curriculum) + " Curriculum" : "-"}</td>
+      <td class="text-nowrap text-center">${escapeOrDash(s.curriculum)}</td>
       <td class="text-nowrap">${escapeOrDash(s.prerequisite)}</td>
       <td class="text-nowrap">${escapeHtml(s.semester)}</td>
       <td class="text-nowrap">${escapeHtml(s.academicYear)}</td>
