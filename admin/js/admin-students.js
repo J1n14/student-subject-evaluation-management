@@ -181,10 +181,10 @@ function renderStudentsTable() {
       <td>${escapeHtml(s.id)}</td>
       <td>${escapeHtml(s.fullName)}</td>
       <td>${escapeHtml(s.email)}</td>
-      <td>${escapeHtml(s.college)}</td>
-      <td>${escapeHtml(s.course)}</td>
-      <td>${s.curriculum ? escapeHtml(s.curriculum) + " Curriculum" : ""}</td>
-      <td>${escapeHtml(s.track)}</td>
+      <td>${escapeOrDash(s.college)}</td>
+      <td>${escapeOrDash(s.course)}</td>
+      <td>${s.curriculum ? escapeHtml(s.curriculum) + " Curriculum" : "-"}</td>
+      <td>${escapeOrDash(s.track)}</td>
       <td>${escapeHtml(s.yearLevel)}</td>
       <td>${statusBadge(s.status || "Pending")}</td>
       <td class="text-end">
@@ -320,10 +320,10 @@ function viewStudent(id) {
       <dt class="col-5">First Name</dt><dd class="col-7">${escapeHtml(s.firstName)}</dd>
       <dt class="col-5">Last Name</dt><dd class="col-7">${escapeHtml(s.lastName)}</dd>
       <dt class="col-5">Email</dt><dd class="col-7">${escapeHtml(s.email)}</dd>
-      <dt class="col-5">Source College</dt><dd class="col-7">${escapeHtml(s.college)}</dd>
-      <dt class="col-5">Course</dt><dd class="col-7">${escapeHtml(s.course)}</dd>
-      <dt class="col-5">Curriculum</dt><dd class="col-7">${escapeHtml(s.curriculum)}</dd>
-      <dt class="col-5">Track</dt><dd class="col-7">${escapeHtml(s.track)}</dd>
+      <dt class="col-5">Source College</dt><dd class="col-7">${escapeOrDash(s.college)}</dd>
+      <dt class="col-5">Course</dt><dd class="col-7">${escapeOrDash(s.course)}</dd>
+      <dt class="col-5">Curriculum</dt><dd class="col-7">${s.curriculum ? escapeHtml(s.curriculum) + " Curriculum" : "-"}</dd>
+      <dt class="col-5">Track</dt><dd class="col-7">${escapeOrDash(s.track)}</dd>
       <dt class="col-5">Year Level</dt><dd class="col-7">${escapeHtml(s.yearLevel)}</dd>
       <dt class="col-5">Status</dt><dd class="col-7">${statusBadge(s.status || "Pending")}</dd>
       <dt class="col-5">Created At</dt><dd class="col-7">${formatDateTime(s.createdAt)}</dd>

@@ -71,6 +71,10 @@ function escapeHtml(str) {
     .replace(/"/g, "&quot;");
 }
 
+function escapeOrDash(str) {
+  return str ? escapeHtml(str) : "-";
+}
+
 function debounce(fn, delay = 300) {
   let t;
   return (...args) => {

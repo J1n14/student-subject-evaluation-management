@@ -161,7 +161,7 @@ function renderSubjectsTable() {
       <td>${escapeHtml(s.subjectName)}</td>
       <td>${escapeHtml(s.units)}</td>
       <td class="text-nowrap">${escapeHtml(s.yearLevel)}</td>
-      <td class="text-nowrap">${escapeHtml(s.track)}</td>
+      <td class="text-nowrap">${escapeOrDash(s.track)}</td>
       <td class="text-nowrap">${escapeHtml(s.semester)}</td>
       <td class="text-nowrap">${escapeHtml(s.academicYear)}</td>
       <td>${statusBadge(s.status || "Active")}</td>
