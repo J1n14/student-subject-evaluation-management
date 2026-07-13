@@ -70,6 +70,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ---------------- creditedSubjects ----------------
+    match /creditedSubjects/{creditId} {
+      allow read: if isAdmin() || (isStudent() && resource.data.studentId == myStudentId());
+      allow write: if isAdmin();
+    }
+
     // ---------------- activityLogs ----------------
     // Any signed-in user may write a log entry for themselves; only Admins
     // may read the log (used on the Admin dashboard).

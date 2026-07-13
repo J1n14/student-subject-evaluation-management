@@ -44,7 +44,7 @@ package.json           Node deps for firebase/create-admin.js (firebase-admin)
 | `admin/html/admin-students.html` / `admin/js/admin-students.js` | Student CRUD, search, filter, pagination |
 | `admin/html/admin-subjects.html` / `admin/js/admin-subjects.js` | Subject CRUD |
 | `admin/html/admin-assignments.html` / `admin/js/admin-assignments.js` | Assign/remove subjects per student |
-| `admin/html/admin-evaluations.html` / `admin/js/admin-evaluations.js` | Per-subject evaluation entry, duplicate-safe |
+| `admin/html/admin-evaluations.html` / `admin/js/admin-evaluations.js` | Per-subject Pass/Fail evaluation entry (duplicate-safe), plus a Credit Evaluation tab for transferee credit tracking against curriculum requirements |
 | `admin/html/admin-reports.html` / `admin/js/admin-reports.js` | Printable reports (summary / assignments / evaluations) |
 | `student/html/student-dashboard.html` / `student/js/student-dashboard.js` | Student welcome + status overview |
 | `student/html/student-subjects.html` / `student/js/student-subjects.js` | Read-only assigned subjects (real-time) |
@@ -151,31 +151,45 @@ Your app will be live at `https://YOUR_PROJECT_ID.web.app`.
 
 ```
 users/{uid}            { role, email, fullName, studentId, createdAt, updatedAt }
-students/{studentId}   { fullName, email, college, curriculum, track, yearLevel, status, uid, createdAt, updatedAt }
-subjects/{subjectId}   { subjectCode, subjectName, units, yearLevel, semester, academicYear, status, createdAt, updatedAt }
+students/{studentId}   { firstName, lastName, fullName, email, college, course, curriculum, track, yearLevel, status, uid, createdAt, updatedAt }
+subjects/{subjectId}   { subjectCode, subjectName, units, yearLevel, semester, academicYear, track, curriculum, prerequisite, status, createdAt, updatedAt }
 studentSubjects/{id}   { studentId, subjectId, assignedAt }
 evaluations/{studentId_subjectId}  { studentId, subjectId, status, remarks, evaluatedBy, evaluatedAt }
+creditedSubjects/{studentId_subjectId}  { studentId, subjectId, creditedFrom, grade, remarks, creditedBy, creditedAt }
 activityLogs/{id}      { userId, email, action, timestamp }
 ```
 
 Notes:
-- `evaluations` documents use a deterministic ID (`studentId_subjectId`) and
-  are written with `{ merge: true }`, so re-saving an evaluation **updates**
-  the existing record instead of creating a duplicate.
+- `evaluations` and `creditedSubjects` documents both use a deterministic ID
+  (`studentId_subjectId`) and are written with `{ merge: true }`, so
+  re-saving either **updates** the existing record instead of creating a
+  duplicate.
 - `students/{id}.status` is recalculated automatically after every
   assignment or evaluation change (`recomputeStudentStatus()` in `shared/js/utils.js`):
   - **Evaluated** — every assigned subject has a saved evaluation.
   - **Pending** — at least one assigned subject has no evaluation yet.
   - **Needs Review** — an evaluation exists for a subject that is no longer
     assigned (data drift), flagged for Admin attention.
+- `subjects.curriculum` (`"Old"`/`"New"`) mirrors `students.curriculum`;
+  subjects without this field set (all subjects created before this feature)
+  are treated as `"New"` curriculum when matching against a student's plan.
+- `subjects.prerequisite` is an optional free-text `subjectCode` checked by
+  the Credit Evaluation tab (Admin → Evaluations) to explain why a subject
+  can't yet be credited.
+- `creditedSubjects` records manual admin entries crediting a transferee's
+  old-school transcript against a catalog subject — a separate concept from
+  `evaluations` (Pass/Fail/Incomplete grading of subjects taken at this
+  school). A subject counts as "completed" for the Credit Evaluation view
+  via either a `creditedSubjects` entry or a Passed `evaluations` entry.
 
 ## 8. Security model summary
 
 - Admins (`users/{uid}.role == 'admin'`) have full read/write access to
   everything.
-- Students can only read their **own** `students`, `studentSubjects`, and
-  `evaluations` documents (matched via `users/{uid}.studentId`), and can
-  never write to subjects, assignments, or evaluations.
+- Students can only read their **own** `students`, `studentSubjects`,
+  `evaluations`, and `creditedSubjects` documents (matched via
+  `users/{uid}.studentId`), and can never write to subjects, assignments,
+  evaluations, or credited subjects.
 - `activityLogs` can be written by any signed-in user for themselves, but
   only read by Admins (used for the "Recent Student Logins" dashboard card).
 - Full details in `firebase/firestore.rules`.

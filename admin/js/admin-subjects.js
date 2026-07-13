@@ -21,6 +21,12 @@ async function initAdminSubjects(content) {
             <option>Service Management</option>
             <option>Business Analytics</option>
           </select>
+          <select class="form-select" style="width:170px" id="filter-curriculum">
+            <option value="">Any Curriculum</option>
+            <option value="Old">Old Curriculum</option>
+            <option value="New">New Curriculum</option>
+            <option value="__untagged">Untagged (legacy)</option>
+          </select>
           <select class="form-select" style="width:140px" id="filter-status">
             <option value="">All Status</option>
             <option>Active</option><option>Inactive</option>
@@ -32,7 +38,7 @@ async function initAdminSubjects(content) {
       </div>
       <div class="table-responsive" style="max-height: calc(100vh - 260px); min-height: 300px; overflow-y: auto;">
         <table class="table table-hover table-sm align-middle mb-0">
-          <thead class="sticky-top bg-white"><tr><th>Code</th><th>Subject Name</th><th>Units</th><th class="text-nowrap">Year</th><th class="text-nowrap text-center">Track</th><th class="text-nowrap">Semester</th><th class="text-nowrap">A.Y.</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+          <thead class="sticky-top bg-white"><tr><th>Code</th><th>Subject Name</th><th>Units</th><th class="text-nowrap">Year</th><th class="text-nowrap text-center">Track</th><th class="text-nowrap text-center">Curriculum</th><th class="text-nowrap">Prerequisite</th><th class="text-nowrap">Semester</th><th class="text-nowrap">A.Y.</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
           <tbody id="subjects-tbody"></tbody>
         </table>
       </div>
@@ -99,6 +105,21 @@ async function initAdminSubjects(content) {
               </div>
               <div class="row">
                 <div class="col-6 mb-3">
+                  <label class="form-label">Curriculum</label>
+                  <select class="form-select" id="curriculum" required>
+                    <option value="">Select</option>
+                    <option value="Old">Old Curriculum</option>
+                    <option value="New">New Curriculum</option>
+                  </select>
+                  <div class="invalid-feedback">Select a curriculum.</div>
+                </div>
+                <div class="col-6 mb-3">
+                  <label class="form-label">Prerequisite</label>
+                  <input type="text" class="form-control" id="prerequisite" placeholder="Subject code, e.g. IT301 (optional)" />
+                </div>
+              </div>
+              <div class="row">
+                <div class="col-6 mb-3">
                   <label class="form-label">Academic Year</label>
                   <input type="text" class="form-control" id="academicYear" placeholder="e.g. 2025-2026" required />
                   <div class="invalid-feedback">Required.</div>
@@ -125,6 +146,7 @@ async function initAdminSubjects(content) {
   document.getElementById("filter-year").addEventListener("change", renderSubjectsTable);
   document.getElementById("filter-semester").addEventListener("change", renderSubjectsTable);
   document.getElementById("filter-track").addEventListener("change", renderSubjectsTable);
+  document.getElementById("filter-curriculum").addEventListener("change", renderSubjectsTable);
   document.getElementById("filter-status").addEventListener("change", renderSubjectsTable);
 
   await loadSubjects();
@@ -141,6 +163,7 @@ function renderSubjectsTable() {
   const yearFilter = document.getElementById("filter-year").value;
   const semFilter = document.getElementById("filter-semester").value;
   const trackFilter = document.getElementById("filter-track").value;
+  const curriculumFilter = document.getElementById("filter-curriculum").value;
   const statusFilter = document.getElementById("filter-status").value;
 
   let filtered = allSubjects.filter((s) => {
@@ -148,8 +171,10 @@ function renderSubjectsTable() {
     const matchesYear = !yearFilter || s.yearLevel === yearFilter;
     const matchesSem = !semFilter || s.semester === semFilter;
     const matchesTrack = !trackFilter || s.track === trackFilter;
+    const matchesCurriculum =
+      !curriculumFilter || (curriculumFilter === "__untagged" ? !s.curriculum : s.curriculum === curriculumFilter);
     const matchesStatus = !statusFilter || s.status === statusFilter;
-    return matchesSearch && matchesYear && matchesSem && matchesTrack && matchesStatus;
+    return matchesSearch && matchesYear && matchesSem && matchesTrack && matchesCurriculum && matchesStatus;
   });
 
   document.getElementById("subjects-tbody").innerHTML = filtered.length
@@ -162,6 +187,8 @@ function renderSubjectsTable() {
       <td>${escapeHtml(s.units)}</td>
       <td class="text-nowrap">${escapeHtml(s.yearLevel)}</td>
       <td class="text-nowrap text-center">${escapeOrDash(s.track)}</td>
+      <td class="text-nowrap text-center">${s.curriculum ? escapeHtml(s.curriculum) + " Curriculum" : "-"}</td>
+      <td class="text-nowrap">${escapeOrDash(s.prerequisite)}</td>
       <td class="text-nowrap">${escapeHtml(s.semester)}</td>
       <td class="text-nowrap">${escapeHtml(s.academicYear)}</td>
       <td>${statusBadge(s.status || "Active")}</td>
@@ -172,7 +199,7 @@ function renderSubjectsTable() {
     </tr>`
         )
         .join("")
-    : `<tr><td colspan="9" class="text-center text-muted py-4">No subjects found.</td></tr>`;
+    : `<tr><td colspan="11" class="text-center text-muted py-4">No subjects found.</td></tr>`;
 
   document.getElementById("subjects-count").textContent = `${filtered.length} subject(s)`;
 }
@@ -193,6 +220,8 @@ function openSubjectModal(id) {
     document.getElementById("yearLevel").value = s.yearLevel || "";
     document.getElementById("semester").value = s.semester || "";
     document.getElementById("track").value = s.track || "";
+    document.getElementById("curriculum").value = s.curriculum || "";
+    document.getElementById("prerequisite").value = s.prerequisite || "";
     document.getElementById("academicYear").value = s.academicYear || "";
     document.getElementById("status").value = s.status || "Active";
   } else {
@@ -217,6 +246,8 @@ async function saveSubject(e) {
       yearLevel: document.getElementById("yearLevel").value,
       semester: document.getElementById("semester").value,
       track: document.getElementById("track").value,
+      curriculum: document.getElementById("curriculum").value,
+      prerequisite: document.getElementById("prerequisite").value.trim(),
       academicYear: document.getElementById("academicYear").value.trim(),
       status: document.getElementById("status").value,
       updatedAt: serverTimestamp()
@@ -249,12 +280,14 @@ async function deleteSubject(id) {
     const batch = db.batch();
     batch.delete(db.collection("subjects").doc(id));
 
-    const [assignSnap, evalSnap] = await Promise.all([
+    const [assignSnap, evalSnap, creditSnap] = await Promise.all([
       db.collection("studentSubjects").where("subjectId", "==", id).get(),
-      db.collection("evaluations").where("subjectId", "==", id).get()
+      db.collection("evaluations").where("subjectId", "==", id).get(),
+      db.collection("creditedSubjects").where("subjectId", "==", id).get()
     ]);
     assignSnap.forEach((d) => batch.delete(d.ref));
     evalSnap.forEach((d) => batch.delete(d.ref));
+    creditSnap.forEach((d) => batch.delete(d.ref));
 
     await batch.commit();
     await logActivity(`Deleted subject ${s.subjectCode}`);
