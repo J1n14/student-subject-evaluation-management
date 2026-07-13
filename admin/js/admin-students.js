@@ -16,7 +16,8 @@ async function initAdminStudents(content) {
           </select>
           <select class="form-select" style="width:150px" id="filter-status">
             <option value="">All Status</option>
-            <option value="Evaluated">Evaluated</option>
+            <option value="Graduated">Graduated</option>
+            <option value="In Progress">In Progress</option>
             <option value="Pending">Pending</option>
           </select>
         </div>
@@ -117,9 +118,10 @@ async function initAdminStudents(content) {
                 <label class="form-label">Status</label>
                 <select class="form-select" id="status">
                   <option value="Pending">Pending</option>
-                  <option value="Evaluated">Evaluated</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Graduated">Graduated</option>
                 </select>
-                <div class="form-text">Status is normally set automatically once evaluations are complete.</div>
+                <div class="form-text">Status is normally set automatically from Credit Evaluation progress.</div>
               </div>
             </div>
             <div class="modal-footer">
@@ -333,7 +335,7 @@ function viewStudent(id) {
 }
 
 async function deleteStudent(id) {
-  if (!confirm(`Delete student ${id}? This also removes their subject assignments and evaluations.`)) return;
+  if (!confirm(`Delete student ${id}? This also removes their subject assignments and credited subjects.`)) return;
   try {
     const student = allStudents.find((s) => s.id === id);
     const batch = db.batch();
@@ -342,12 +344,12 @@ async function deleteStudent(id) {
       batch.delete(db.collection("users").doc(student.uid));
     }
 
-    const [assignSnap, evalSnap] = await Promise.all([
+    const [assignSnap, creditSnap] = await Promise.all([
       db.collection("studentSubjects").where("studentId", "==", id).get(),
-      db.collection("evaluations").where("studentId", "==", id).get()
+      db.collection("creditedSubjects").where("studentId", "==", id).get()
     ]);
     assignSnap.forEach((d) => batch.delete(d.ref));
-    evalSnap.forEach((d) => batch.delete(d.ref));
+    creditSnap.forEach((d) => batch.delete(d.ref));
 
     await batch.commit();
     await logActivity(`Deleted student ${id}`);

@@ -275,18 +275,16 @@ async function saveSubject(e) {
 
 async function deleteSubject(id) {
   const s = allSubjects.find((x) => x.id === id);
-  if (!confirm(`Delete subject ${s.subjectCode}? This also removes related assignments and evaluations.`)) return;
+  if (!confirm(`Delete subject ${s.subjectCode}? This also removes related assignments and credited subjects.`)) return;
   try {
     const batch = db.batch();
     batch.delete(db.collection("subjects").doc(id));
 
-    const [assignSnap, evalSnap, creditSnap] = await Promise.all([
+    const [assignSnap, creditSnap] = await Promise.all([
       db.collection("studentSubjects").where("subjectId", "==", id).get(),
-      db.collection("evaluations").where("subjectId", "==", id).get(),
       db.collection("creditedSubjects").where("subjectId", "==", id).get()
     ]);
     assignSnap.forEach((d) => batch.delete(d.ref));
-    evalSnap.forEach((d) => batch.delete(d.ref));
     creditSnap.forEach((d) => batch.delete(d.ref));
 
     await batch.commit();

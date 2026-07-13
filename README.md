@@ -27,6 +27,8 @@ firebase/
   firestore.rules, firestore.indexes.json   Firestore security rules + composite indexes
   storage.rules        Optional Storage rules for profile pictures
   create-admin.js      One-time script: creates the first Admin account
+  seed-old-curriculum.js  One-time script: bulk-seeds the Old-curriculum
+                       subject catalog (run again after editing its list)
   serviceAccountKey.json   Admin SDK credential (gitignored, not committed)
 firebase.json          Hosting/deploy config (stays at project root - required
                        by the Firebase CLI)
@@ -38,17 +40,17 @@ package.json           Node deps for firebase/create-admin.js (firebase-admin)
 | `shared/js/firebase-config.js` | Firebase SDK init — **edit this with your project keys** |
 | `shared/js/auth.js` | Login / route guards |
 | `shared/js/layout.js` | Shared sidebar/topbar for both portals |
-| `shared/js/utils.js` | Toasts, formatting, pagination, activity logs, auto-status logic |
+| `shared/js/utils.js` | Toasts, formatting, pagination, activity logs, and the shared Credit Evaluation computation helpers (`getRequiredSubjects`, `computeCreditProgress`, `getNotCreditedReason`, `recomputeCreditStatus`, etc.) used by both portals |
 | `shared/css/style.css` | All styling, including print styles for Reports |
-| `admin/html/admin-dashboard.html` / `admin/js/admin-dashboard.js` | Admin dashboard: summary cards, recent activity, chart |
+| `admin/html/admin-dashboard.html` / `admin/js/admin-dashboard.js` | Admin dashboard: summary cards, recent credited subjects, credit status chart |
 | `admin/html/admin-students.html` / `admin/js/admin-students.js` | Student CRUD, search, filter, pagination |
-| `admin/html/admin-subjects.html` / `admin/js/admin-subjects.js` | Subject CRUD |
+| `admin/html/admin-subjects.html` / `admin/js/admin-subjects.js` | Subject CRUD (including Curriculum and Prerequisite) |
 | `admin/html/admin-assignments.html` / `admin/js/admin-assignments.js` | Assign/remove subjects per student |
-| `admin/html/admin-evaluations.html` / `admin/js/admin-evaluations.js` | Per-subject Pass/Fail evaluation entry (duplicate-safe), plus a Credit Evaluation tab for transferee credit tracking against curriculum requirements |
-| `admin/html/admin-reports.html` / `admin/js/admin-reports.js` | Printable reports (summary / assignments / evaluations) |
+| `admin/html/admin-evaluations.html` / `admin/js/admin-evaluations.js` | Credit Evaluation: progress ring/bars, Credited Subjects (manual transcript credits), Subjects Still To Take against curriculum requirements |
+| `admin/html/admin-reports.html` / `admin/js/admin-reports.js` | Printable reports (summary / assignments / credited subjects) |
 | `student/html/student-dashboard.html` / `student/js/student-dashboard.js` | Student welcome + status overview |
 | `student/html/student-subjects.html` / `student/js/student-subjects.js` | Read-only assigned subjects (real-time) |
-| `student/html/student-evaluations.html` / `student/js/student-evaluations.js` | Read-only evaluation results (real-time) |
+| `student/html/student-evaluations.html` / `student/js/student-evaluations.js` | Read-only mirror of the student's own Credit Evaluation (progress, credited subjects, still to take) |
 
 ## 2. Firebase project setup
 
@@ -154,42 +156,45 @@ users/{uid}            { role, email, fullName, studentId, createdAt, updatedAt 
 students/{studentId}   { firstName, lastName, fullName, email, college, course, curriculum, track, yearLevel, status, uid, createdAt, updatedAt }
 subjects/{subjectId}   { subjectCode, subjectName, units, yearLevel, semester, academicYear, track, curriculum, prerequisite, status, createdAt, updatedAt }
 studentSubjects/{id}   { studentId, subjectId, assignedAt }
-evaluations/{studentId_subjectId}  { studentId, subjectId, status, remarks, evaluatedBy, evaluatedAt }
 creditedSubjects/{studentId_subjectId}  { studentId, subjectId, creditedFrom, grade, remarks, creditedBy, creditedAt }
 activityLogs/{id}      { userId, email, action, timestamp }
 ```
 
 Notes:
-- `evaluations` and `creditedSubjects` documents both use a deterministic ID
-  (`studentId_subjectId`) and are written with `{ merge: true }`, so
-  re-saving either **updates** the existing record instead of creating a
-  duplicate.
+- `creditedSubjects` documents use a deterministic ID (`studentId_subjectId`)
+  and are written with `{ merge: true }`, so re-saving **updates** the
+  existing record instead of creating a duplicate.
+- There is no Pass/Fail/Incomplete grading concept in this system — a
+  subject only counts as complete for a student once an admin manually
+  records it in `creditedSubjects` (Admin → Evaluations → Credit
+  Evaluation), based on the student's transcript or in-house record.
 - `students/{id}.status` is recalculated automatically after every
-  assignment or evaluation change (`recomputeStudentStatus()` in `shared/js/utils.js`):
-  - **Evaluated** — every assigned subject has a saved evaluation.
-  - **Pending** — at least one assigned subject has no evaluation yet.
-  - **Needs Review** — an evaluation exists for a subject that is no longer
-    assigned (data drift), flagged for Admin attention.
+  Credit Evaluation change (`recomputeCreditStatus()` in `shared/js/utils.js`):
+  - **Graduated** — every subject required by the student's curriculum/track
+    plan has been credited.
+  - **In Progress** — at least one required subject is credited, but not all.
+  - **Pending** — no required subjects are defined yet for this student's
+    curriculum/track, or none have been credited yet.
 - `subjects.curriculum` (`"Old"`/`"New"`) mirrors `students.curriculum`;
   subjects without this field set (all subjects created before this feature)
   are treated as `"New"` curriculum when matching against a student's plan.
-- `subjects.prerequisite` is an optional free-text `subjectCode` checked by
-  the Credit Evaluation tab (Admin → Evaluations) to explain why a subject
-  can't yet be credited.
-- `creditedSubjects` records manual admin entries crediting a transferee's
-  old-school transcript against a catalog subject — a separate concept from
-  `evaluations` (Pass/Fail/Incomplete grading of subjects taken at this
-  school). A subject counts as "completed" for the Credit Evaluation view
-  via either a `creditedSubjects` entry or a Passed `evaluations` entry.
+- `subjects.track` similarly falls back to matching every track if unset
+  (legacy subjects created before the Track field existed).
+- `subjects.prerequisite` is an optional free-text `subjectCode` (or
+  comma-separated list of codes) checked by the Credit Evaluation view to
+  explain why a subject can't yet be credited.
+- `firebase/seed-old-curriculum.js` bulk-seeds the Old-curriculum BSIT
+  subject catalog (all three tracks: Network Technology, Business Analytics,
+  Service Management) using deterministic `old_<Code>` doc IDs, so re-running
+  it after editing the list only updates existing rows.
 
 ## 8. Security model summary
 
 - Admins (`users/{uid}.role == 'admin'`) have full read/write access to
   everything.
-- Students can only read their **own** `students`, `studentSubjects`,
-  `evaluations`, and `creditedSubjects` documents (matched via
-  `users/{uid}.studentId`), and can never write to subjects, assignments,
-  evaluations, or credited subjects.
+- Students can only read their **own** `students`, `studentSubjects`, and
+  `creditedSubjects` documents (matched via `users/{uid}.studentId`), and can
+  never write to subjects, assignments, or credited subjects.
 - `activityLogs` can be written by any signed-in user for themselves, but
   only read by Admins (used for the "Recent Student Logins" dashboard card).
 - Full details in `firebase/firestore.rules`.

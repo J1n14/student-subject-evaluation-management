@@ -4,14 +4,14 @@ async function initStudentDashboard(content, profile) {
   const studentDoc = await db.collection("students").doc(profile.studentId).get();
   const student = studentDoc.exists ? studentDoc.data() : {};
 
-  const [assignSnap, evalSnap] = await Promise.all([
+  const [assignSnap, creditSnap] = await Promise.all([
     db.collection("studentSubjects").where("studentId", "==", profile.studentId).get(),
-    db.collection("evaluations").where("studentId", "==", profile.studentId).orderBy("evaluatedAt", "desc").get()
+    db.collection("creditedSubjects").where("studentId", "==", profile.studentId).orderBy("creditedAt", "desc").get()
   ]);
 
   const assignedCount = assignSnap.size;
-  const evaluatedCount = evalSnap.size;
-  const latestEval = evalSnap.docs[0]?.data();
+  const creditedCount = creditSnap.size;
+  const latestCredit = creditSnap.docs[0]?.data();
   const status = student.status || "Pending";
 
   content.innerHTML = `
@@ -28,27 +28,27 @@ async function initStudentDashboard(content, profile) {
       </div>
       <div class="col-6 col-lg-3">
         <div class="summary-card bg-card-2">
-          <div class="small opacity-75">Subjects Evaluated</div>
-          <h3>${evaluatedCount}</h3>
+          <div class="small opacity-75">Subjects Credited</div>
+          <h3>${creditedCount}</h3>
         </div>
       </div>
       <div class="col-6 col-lg-3">
         <div class="summary-card bg-card-3">
-          <div class="small opacity-75">Evaluation Status</div>
+          <div class="small opacity-75">Credit Status</div>
           <h3 class="fs-5">${statusBadge(status)}</h3>
         </div>
       </div>
       <div class="col-6 col-lg-3">
         <div class="summary-card bg-card-4">
-          <div class="small opacity-75">Date Evaluated</div>
-          <h3 class="fs-5">${latestEval ? formatDate(latestEval.evaluatedAt) : "—"}</h3>
+          <div class="small opacity-75">Last Credited</div>
+          <h3 class="fs-5">${latestCredit ? formatDate(latestCredit.creditedAt) : "—"}</h3>
         </div>
       </div>
     </div>
     <div class="section-card mt-3">
       <p class="mb-0">
         Head to <a href="student-subjects.html">My Subjects</a> to see what's assigned to you this term, or check
-        <a href="student-evaluations.html">My Evaluation Results</a> once your Admin has evaluated your subjects.
+        <a href="student-evaluations.html">My Credit Evaluation</a> to see your progress toward graduation.
       </p>
     </div>`;
 }

@@ -170,7 +170,6 @@ async function saveAssignments(e, studentId) {
     await batch.commit();
     await logActivity(`Updated subject assignments for student ${studentId}`);
     showToast("Assignment saved.");
-    await recomputeStudentStatus(studentId);
     await selectStudentForAssignment(studentId);
   } catch (err) {
     showError(err, "Failed to save assignment.");
@@ -185,7 +184,6 @@ async function removeAssignment(subjectId) {
     await db.collection("studentSubjects").doc(assignment.id).delete();
     await logActivity(`Removed subject assignment ${subjectId}`);
     showToast("Assignment removed.");
-    await recomputeStudentStatus(assignment.studentId);
     await selectStudentForAssignment(assignment.studentId);
   } catch (err) {
     showError(err, "Failed to remove assignment.");

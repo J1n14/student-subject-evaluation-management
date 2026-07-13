@@ -16,7 +16,7 @@ const ADMIN_NAV = [
 const STUDENT_NAV = [
   { key: "dashboard", label: "Dashboard", href: "student-dashboard.html", icon: "bi-speedometer2" },
   { key: "subjects", label: "My Subjects", href: "student-subjects.html", icon: "bi-journal-bookmark" },
-  { key: "evaluations", label: "My Evaluation Results", href: "student-evaluations.html", icon: "bi-clipboard-check" }
+  { key: "evaluations", label: "My Credit Evaluation", href: "student-evaluations.html", icon: "bi-award" }
 ];
 
 function buildSidebar(navItems, active, title) {

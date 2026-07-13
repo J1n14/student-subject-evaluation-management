@@ -11,7 +11,7 @@ async function initAdminReports(content, profile) {
           <select class="form-select" id="report-type">
             <option value="summary">Summary Overview</option>
             <option value="assignments">Subject Assignments</option>
-            <option value="evaluations">Evaluation Results</option>
+            <option value="credits">Credited Subjects</option>
           </select>
         </div>
         <div class="col-md-3">
@@ -32,21 +32,22 @@ async function generateReport() {
   const out = document.getElementById("report-output");
   out.innerHTML = `<div class="text-muted small">Generating...</div>`;
 
-  const [studentsSnap, subjectsSnap, assignSnap, evalSnap] = await Promise.all([
+  const [studentsSnap, subjectsSnap, assignSnap, creditSnap] = await Promise.all([
     db.collection("students").get(),
     db.collection("subjects").get(),
     db.collection("studentSubjects").get(),
-    db.collection("evaluations").get()
+    db.collection("creditedSubjects").get()
   ]);
 
   const students = studentsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
   const subjects = {};
   subjectsSnap.forEach((d) => (subjects[d.id] = d.data()));
   const assignments = assignSnap.docs.map((d) => d.data());
-  const evaluations = evalSnap.docs.map((d) => d.data());
+  const creditedSubjects = creditSnap.docs.map((d) => d.data());
 
-  const evaluatedCount = students.filter((s) => s.status === "Evaluated").length;
-  const pendingCount = students.length - evaluatedCount;
+  const graduatedCount = students.filter((s) => s.status === "Graduated").length;
+  const inProgressCount = students.filter((s) => s.status === "In Progress").length;
+  const pendingCount = students.length - graduatedCount - inProgressCount;
 
   const header = `
     <div class="report-header text-center mb-4">
@@ -67,10 +68,11 @@ async function generateReport() {
       <div class="row g-3 mb-4">
         ${[
           ["Total Students", students.length],
-          ["Evaluated Students", evaluatedCount],
+          ["Graduated Students", graduatedCount],
+          ["In Progress", inProgressCount],
           ["Pending Students", pendingCount],
           ["Total Subjects", subjectsSnap.size],
-          ["Total Evaluations", evalSnap.size]
+          ["Total Credited Subjects", creditSnap.size]
         ]
           .map(([label, val]) => `<div class="col"><div class="border rounded p-3 text-center"><div class="small text-muted">${label}</div><h4 class="mb-0">${val}</h4></div></div>`)
           .join("")}
@@ -93,15 +95,15 @@ async function generateReport() {
           })
           .join("")}</tbody>
       </table>`;
-  } else if (type === "evaluations") {
+  } else if (type === "credits") {
     body = `
       <table class="table table-bordered table-sm">
-        <thead><tr><th>Student ID</th><th>Student Name</th><th>Subject</th><th>Status</th><th>Remarks</th><th>Evaluated By</th><th>Date</th></tr></thead>
-        <tbody>${evaluations
-          .map((e) => {
-            const s = students.find((st) => st.id === e.studentId);
-            const sub = subjects[e.subjectId];
-            return `<tr><td>${escapeHtml(e.studentId)}</td><td>${escapeHtml(s ? s.fullName : "?")}</td><td>${escapeHtml(sub ? sub.subjectCode : "?")}</td><td>${escapeHtml(e.status)}</td><td>${escapeHtml(e.remarks)}</td><td>${escapeHtml(e.evaluatedBy)}</td><td>${formatDate(e.evaluatedAt)}</td></tr>`;
+        <thead><tr><th>Student ID</th><th>Student Name</th><th>Subject</th><th>Credited From</th><th>Grade</th><th>Credited By</th><th>Date</th></tr></thead>
+        <tbody>${creditedSubjects
+          .map((c) => {
+            const s = students.find((st) => st.id === c.studentId);
+            const sub = subjects[c.subjectId];
+            return `<tr><td>${escapeHtml(c.studentId)}</td><td>${escapeHtml(s ? s.fullName : "?")}</td><td>${escapeHtml(sub ? sub.subjectCode : "?")}</td><td>${escapeHtml(c.creditedFrom)}</td><td>${escapeHtml(c.grade)}</td><td>${escapeHtml(c.creditedBy)}</td><td>${formatDate(c.creditedAt)}</td></tr>`;
           })
           .join("")}</tbody>
       </table>`;

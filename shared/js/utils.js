@@ -49,14 +49,11 @@ function formatDateTime(ts) {
 
 function statusBadge(status) {
   const map = {
-    Evaluated: "bg-success",
+    Graduated: "bg-success",
+    "In Progress": "bg-info text-dark",
     Pending: "bg-warning text-dark",
     Active: "bg-success",
-    Inactive: "bg-secondary",
-    "Needs Review": "bg-danger",
-    Passed: "bg-success",
-    Failed: "bg-danger",
-    Incomplete: "bg-warning text-dark"
+    Inactive: "bg-secondary"
   };
   const cls = map[status] || "bg-secondary";
   return `<span class="badge ${cls}">${status}</span>`;
@@ -127,28 +124,120 @@ function validateForm(formEl) {
   return formEl.checkValidity();
 }
 
-// Evaluated: every assigned subject has an evaluation.
-// Pending: some assigned subject is missing one.
-// Needs Review: an evaluation exists for a subject no longer assigned (data drift).
-async function recomputeStudentStatus(studentId) {
-  const [assignSnap, evalSnap] = await Promise.all([
-    db.collection("studentSubjects").where("studentId", "==", studentId).get(),
-    db.collection("evaluations").where("studentId", "==", studentId).get()
+// ==================== Credit Evaluation shared helpers ====================
+// Used by both Admin Evaluations (admin-evaluations.js) and the student's
+// own read-only Credit Evaluation page (student-evaluations.js).
+
+const YEAR_ORDER = ["1st Year", "2nd Year", "3rd Year", "4th Year"];
+
+// A subject counts toward a student's plan if it's Active, its curriculum
+// matches the student's (missing curriculum on legacy subjects is treated
+// as "New"), and its track matches the student's track, is "All Tracks", or
+// is unset (legacy subjects created before the Track field existed apply to
+// every track).
+function getRequiredSubjects(student, allSubjectsArr) {
+  const studentCurriculum = student.curriculum || "New";
+  return allSubjectsArr.filter((s) => {
+    const subjCurriculum = s.curriculum || "New";
+    const matchesCurriculum = subjCurriculum === studentCurriculum;
+    const matchesTrack = !s.track || s.track === student.track || s.track === "All Tracks";
+    const isActive = (s.status || "Active") === "Active";
+    return matchesCurriculum && matchesTrack && isActive;
+  });
+}
+
+function buildCreditedMap(creditedDocs) {
+  const map = new Map();
+  creditedDocs.forEach((c) => map.set(c.subjectId, c));
+  return map;
+}
+
+function computeCreditProgress(requiredSubjects, creditedMap) {
+  const perYear = {};
+  YEAR_ORDER.forEach((y) => (perYear[y] = { creditedUnits: 0, requiredUnits: 0 }));
+
+  let totalCreditedUnits = 0;
+  let totalRequiredUnits = 0;
+
+  requiredSubjects.forEach((s) => {
+    const bucket = perYear[s.yearLevel] || (perYear[s.yearLevel] = { creditedUnits: 0, requiredUnits: 0 });
+    const units = Number(s.units) || 0;
+    bucket.requiredUnits += units;
+    totalRequiredUnits += units;
+    if (creditedMap.has(s.id)) {
+      bucket.creditedUnits += units;
+      totalCreditedUnits += units;
+    }
+  });
+
+  const overallPercent = totalRequiredUnits > 0 ? Math.round((totalCreditedUnits / totalRequiredUnits) * 100) : 0;
+
+  return {
+    perYear,
+    totalCreditedUnits,
+    totalRequiredUnits,
+    remainingUnits: Math.max(0, totalRequiredUnits - totalCreditedUnits),
+    overallPercent
+  };
+}
+
+function getNotCreditedReason(subject, creditedMap, requiredSubjectsById) {
+  const prereqText = (subject.prerequisite || "").trim();
+  if (!prereqText) return "Not yet credited.";
+
+  // Prerequisite field may list more than one code, e.g. "IT 221, IT 222".
+  const prereqCodes = prereqText.split(",").map((c) => c.trim()).filter(Boolean);
+
+  for (const code of prereqCodes) {
+    const prereqSubject = Object.values(requiredSubjectsById).find((s) => s.subjectCode === code);
+    if (!prereqSubject) {
+      return `Not yet credited. (Prerequisite "${escapeHtml(code)}" not found in curriculum.)`;
+    }
+    if (!creditedMap.has(prereqSubject.id)) {
+      return `Requires prerequisite "${escapeHtml(prereqSubject.subjectCode)} - ${escapeHtml(prereqSubject.subjectName)}" to be completed first.`;
+    }
+  }
+  return "Not yet credited.";
+}
+
+function renderProgressRingSvg(percent) {
+  const radius = 54;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference * (1 - percent / 100);
+  return `
+    <svg width="140" height="140" viewBox="0 0 140 140">
+      <circle cx="70" cy="70" r="${radius}" fill="none" stroke="#e9ecef" stroke-width="12" />
+      <circle cx="70" cy="70" r="${radius}" fill="none" stroke="#0d6efd" stroke-width="12"
+        stroke-linecap="round" stroke-dasharray="${circumference}" stroke-dashoffset="${offset}"
+        transform="rotate(-90 70 70)" />
+      <text x="70" y="65" text-anchor="middle" font-size="24" font-weight="700">${percent}%</text>
+      <text x="70" y="86" text-anchor="middle" font-size="11" fill="#6c757d">of units</text>
+    </svg>`;
+}
+
+// Graduated: every required subject (per curriculum+track) is credited.
+// In Progress: at least one required subject is credited, but not all.
+// Pending: no required subjects defined yet, or none credited yet.
+async function recomputeCreditStatus(studentId) {
+  const studentDoc = await db.collection("students").doc(studentId).get();
+  if (!studentDoc.exists) return "Pending";
+  const student = studentDoc.data();
+
+  const [subjectsSnap, creditedSnap] = await Promise.all([
+    db.collection("subjects").get(),
+    db.collection("creditedSubjects").where("studentId", "==", studentId).get()
   ]);
 
-  const assignedSubjectIds = new Set(assignSnap.docs.map((d) => d.data().subjectId));
-  const evaluatedSubjectIds = new Set(evalSnap.docs.map((d) => d.data().subjectId));
+  const allSubjects = subjectsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const required = getRequiredSubjects(student, allSubjects);
+  const creditedIds = new Set(creditedSnap.docs.map((d) => d.data().subjectId));
 
   let status;
-  const orphanEvaluations = [...evaluatedSubjectIds].some((id) => !assignedSubjectIds.has(id));
-
-  if (assignedSubjectIds.size === 0) {
+  if (required.length === 0) {
     status = "Pending";
-  } else if (orphanEvaluations) {
-    status = "Needs Review";
   } else {
-    const allEvaluated = [...assignedSubjectIds].every((id) => evaluatedSubjectIds.has(id));
-    status = allEvaluated ? "Evaluated" : "Pending";
+    const creditedCount = required.filter((s) => creditedIds.has(s.id)).length;
+    status = creditedCount === required.length ? "Graduated" : creditedCount > 0 ? "In Progress" : "Pending";
   }
 
   await db.collection("students").doc(studentId).update({ status, updatedAt: serverTimestamp() });

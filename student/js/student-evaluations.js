@@ -1,47 +1,133 @@
-let studentEvalUnsub = null;
-
 async function initStudentEvaluations(content, profile) {
+  content.innerHTML = `<div class="text-muted small">Loading your credit evaluation...</div>`;
+
+  const [studentDoc, subjectsSnap, creditedSnap] = await Promise.all([
+    db.collection("students").doc(profile.studentId).get(),
+    db.collection("subjects").get(),
+    db.collection("creditedSubjects").where("studentId", "==", profile.studentId).get()
+  ]);
+
+  const student = { id: profile.studentId, ...(studentDoc.exists ? studentDoc.data() : {}) };
+  const allSubjects = subjectsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const creditedDocs = creditedSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+  const requiredSubjects = getRequiredSubjects(student, allSubjects);
+  const requiredSubjectsById = Object.fromEntries(requiredSubjects.map((s) => [s.id, s]));
+  const creditedMap = buildCreditedMap(creditedDocs);
+  const progress = computeCreditProgress(requiredSubjects, creditedMap);
+
+  const creditedRows = requiredSubjects.filter((s) => creditedMap.has(s.id));
+  const stillToTakeRows = requiredSubjects
+    .filter((s) => !creditedMap.has(s.id))
+    .sort((a, b) => {
+      const yearDiff = YEAR_ORDER.indexOf(a.yearLevel) - YEAR_ORDER.indexOf(b.yearLevel);
+      if (yearDiff !== 0) return yearDiff;
+      if (a.semester !== b.semester) return (a.semester || "").localeCompare(b.semester || "");
+      return (a.subjectCode || "").localeCompare(b.subjectCode || "");
+    });
+
+  const emptyPoolNotice =
+    requiredSubjects.length === 0
+      ? `<div class="alert alert-warning">No catalog subjects found yet for your <strong>${escapeOrDash(student.curriculum)} curriculum</strong> / <strong>${escapeOrDash(student.track)} track</strong>. Check back once your Admin has added them.</div>`
+      : "";
+
   content.innerHTML = `
     <div class="table-responsive-card">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h6 class="mb-0"><i class="bi bi-clipboard-check me-1"></i>My Evaluation Results</h6>
-        <span id="overall-status-badge"></span>
+      <div class="d-flex justify-content-between align-items-start mb-3">
+        <div>
+          <h5 class="mb-0">${escapeHtml(student.fullName || profile.fullName || profile.email)}</h5>
+          <div class="text-muted small">
+            Student No. ${escapeHtml(student.id)} &middot; ${escapeOrDash(student.curriculum)} curriculum &middot;
+            ${escapeOrDash(student.track)} track &middot; ${escapeOrDash(student.yearLevel)}
+          </div>
+        </div>
+        ${statusBadge(student.status || "Pending")}
       </div>
+
+      ${emptyPoolNotice}
+
+      <div class="row g-3 align-items-center mb-4">
+        <div class="col-auto">${renderProgressRingSvg(progress.overallPercent)}</div>
+        <div class="col">
+          <div class="small text-uppercase text-muted fw-semibold mb-2">Progress by Year Level</div>
+          ${YEAR_ORDER.map((y) => {
+            const { creditedUnits, requiredUnits } = progress.perYear[y];
+            const pct = requiredUnits > 0 ? Math.round((creditedUnits / requiredUnits) * 100) : 0;
+            return `
+            <div class="mb-2">
+              <div class="d-flex justify-content-between small mb-1">
+                <span>${y}</span>
+                <span class="text-muted">${creditedUnits}/${requiredUnits} u</span>
+              </div>
+              <div class="progress" style="height:8px;">
+                <div class="progress-bar" role="progressbar" style="width:${pct}%"></div>
+              </div>
+            </div>`;
+          }).join("")}
+        </div>
+        <div class="col-auto text-center">
+          <div class="d-flex gap-4">
+            <div><div class="fw-bold fs-5">${progress.totalCreditedUnits}</div><div class="small text-muted">credited units</div></div>
+            <div><div class="fw-bold fs-5">${progress.remainingUnits}</div><div class="small text-muted">remaining units</div></div>
+          </div>
+          <div class="progress mt-2" style="height:6px; width:180px;">
+            <div class="progress-bar bg-success" style="width:${progress.overallPercent}%"></div>
+            <div class="progress-bar bg-light border" style="width:${100 - progress.overallPercent}%"></div>
+          </div>
+        </div>
+      </div>
+
+      <h6 class="mb-2">Credited Subjects</h6>
+      <div class="table-responsive mb-4">
+        <table class="table table-sm">
+          <thead><tr><th>Code</th><th>Subject</th><th>Units</th><th>Credited From</th><th>Grade</th><th>Remarks</th></tr></thead>
+          <tbody>
+            ${
+              creditedRows.length
+                ? creditedRows
+                    .map((s) => {
+                      const record = creditedMap.get(s.id);
+                      return `
+                  <tr>
+                    <td class="text-nowrap">${escapeHtml(s.subjectCode)}</td>
+                    <td>${escapeHtml(s.subjectName)}</td>
+                    <td>${escapeHtml(s.units)}</td>
+                    <td>${escapeHtml(record.creditedFrom)}</td>
+                    <td>${escapeHtml(record.grade)}</td>
+                    <td>${escapeOrDash(record.remarks)}</td>
+                  </tr>`;
+                    })
+                    .join("")
+                : `<tr><td colspan="6" class="text-center text-muted py-3">No credited subjects yet.</td></tr>`
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <h6 class="mb-2">Subjects Still To Take (full path to graduation)</h6>
       <div class="table-responsive">
-        <table class="table table-hover align-middle">
-          <thead><tr><th>Subject Code</th><th>Subject Name</th><th>Status</th><th>Remarks</th><th>Date Evaluated</th></tr></thead>
-          <tbody id="my-evals-tbody"><tr><td colspan="5" class="text-center text-muted py-3">Loading...</td></tr></tbody>
+        <table class="table table-sm">
+          <thead><tr><th>Year</th><th>Semester</th><th>Code</th><th>Subject</th><th>Units</th><th>Why not credited</th></tr></thead>
+          <tbody>
+            ${
+              stillToTakeRows.length
+                ? stillToTakeRows
+                    .map(
+                      (s) => `
+                <tr>
+                  <td class="text-nowrap">${escapeHtml(s.yearLevel)}</td>
+                  <td class="text-nowrap">${escapeHtml(s.semester)}</td>
+                  <td class="text-nowrap">${escapeHtml(s.subjectCode)}</td>
+                  <td>${escapeHtml(s.subjectName)}</td>
+                  <td>${escapeHtml(s.units)}</td>
+                  <td class="small">${getNotCreditedReason(s, creditedMap, requiredSubjectsById)}</td>
+                </tr>`
+                    )
+                    .join("")
+                : `<tr><td colspan="6" class="text-center text-muted py-3">${requiredSubjects.length ? "All required subjects are credited." : "No required subjects to display yet."}</td></tr>`
+            }
+          </tbody>
         </table>
       </div>
     </div>`;
-
-  const studentDoc = await db.collection("students").doc(profile.studentId).get();
-  const overallStatus = studentDoc.exists ? studentDoc.data().status || "Pending" : "Pending";
-  document.getElementById("overall-status-badge").innerHTML = statusBadge(overallStatus);
-
-  if (studentEvalUnsub) studentEvalUnsub();
-  studentEvalUnsub = db
-    .collection("evaluations")
-    .where("studentId", "==", profile.studentId)
-    .onSnapshot(async (snap) => {
-      if (snap.empty) {
-        document.getElementById("my-evals-tbody").innerHTML = `<tr><td colspan="5" class="text-center text-muted py-4">No evaluations recorded yet.</td></tr>`;
-        return;
-      }
-      const rows = await Promise.all(
-        snap.docs.map(async (d) => {
-          const e = d.data();
-          const subDoc = await db.collection("subjects").doc(e.subjectId).get();
-          const sub = subDoc.exists ? subDoc.data() : { subjectCode: "?", subjectName: "Unknown" };
-          return `<tr>
-            <td>${escapeHtml(sub.subjectCode)}</td>
-            <td>${escapeHtml(sub.subjectName)}</td>
-            <td>${statusBadge(e.status)}</td>
-            <td>${escapeHtml(e.remarks || "—")}</td>
-            <td>${formatDate(e.evaluatedAt)}</td>
-          </tr>`;
-        })
-      );
-      document.getElementById("my-evals-tbody").innerHTML = rows.join("");
-    });
 }

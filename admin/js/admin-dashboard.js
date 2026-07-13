@@ -4,11 +4,11 @@ async function initAdminDashboard(content) {
     <div class="row g-3 mt-1">
       <div class="col-lg-6">
         <div class="table-responsive-card mb-3">
-          <h6 class="mb-3"><i class="bi bi-clipboard-check me-1"></i>Recent Evaluations</h6>
-          <div id="recent-evaluations"><div class="text-muted small">Loading...</div></div>
+          <h6 class="mb-3"><i class="bi bi-award me-1"></i>Recent Credited Subjects</h6>
+          <div id="recent-credits"><div class="text-muted small">Loading...</div></div>
         </div>
         <div class="table-responsive-card">
-          <h6 class="mb-3"><i class="bi bi-pie-chart me-1"></i>Evaluation Status</h6>
+          <h6 class="mb-3"><i class="bi bi-pie-chart me-1"></i>Credit Status</h6>
           <div style="position: relative; height: 180px;">
             <canvas id="statusChart"></canvas>
           </div>
@@ -31,35 +31,36 @@ async function initAdminDashboard(content) {
 
 async function loadDashboardData() {
   try {
-    const [studentsSnap, subjectsSnap, evaluationsSnap] = await Promise.all([
+    const [studentsSnap, subjectsSnap, creditedSnap] = await Promise.all([
       db.collection("students").get(),
       db.collection("subjects").get(),
-      db.collection("evaluations").get()
+      db.collection("creditedSubjects").get()
     ]);
 
     const totalStudents = studentsSnap.size;
-    const evaluated = studentsSnap.docs.filter((d) => d.data().status === "Evaluated").length;
-    const pending = studentsSnap.docs.filter((d) => d.data().status !== "Evaluated").length;
+    const graduated = studentsSnap.docs.filter((d) => d.data().status === "Graduated").length;
+    const inProgress = studentsSnap.docs.filter((d) => d.data().status === "In Progress").length;
+    const pending = totalStudents - graduated - inProgress;
     const totalSubjects = subjectsSnap.size;
-    const totalEvaluations = evaluationsSnap.size;
+    const totalCredited = creditedSnap.size;
 
-    renderSummaryCards({ totalStudents, evaluated, pending, totalSubjects, totalEvaluations });
-    renderStatusChart(evaluated, pending);
-    renderStatsList({ totalStudents, evaluated, pending, totalSubjects, totalEvaluations });
+    renderSummaryCards({ totalStudents, graduated, inProgress, pending, totalSubjects, totalCredited });
+    renderStatusChart(graduated, inProgress, pending);
+    renderStatsList({ totalStudents, graduated, inProgress, pending, totalSubjects, totalCredited });
 
-    await Promise.all([loadRecentEvaluations(), loadRecentLogins()]);
+    await Promise.all([loadRecentCreditedSubjects(), loadRecentLogins()]);
   } catch (err) {
     showError(err, "Failed to load dashboard data.");
   }
 }
 
-function renderSummaryCards({ totalStudents, evaluated, pending, totalSubjects, totalEvaluations }) {
+function renderSummaryCards({ totalStudents, graduated, inProgress, pending, totalSubjects, totalCredited }) {
   const cards = [
     { label: "Total Students", value: totalStudents, icon: "bi-people", cls: "bg-card-1" },
-    { label: "Evaluated Students", value: evaluated, icon: "bi-check-circle", cls: "bg-card-2" },
-    { label: "Pending Students", value: pending, icon: "bi-hourglass-split", cls: "bg-card-3" },
+    { label: "Graduated Students", value: graduated, icon: "bi-check-circle", cls: "bg-card-2" },
+    { label: "In Progress", value: inProgress, icon: "bi-hourglass-split", cls: "bg-card-3" },
     { label: "Total Subjects", value: totalSubjects, icon: "bi-journal-bookmark", cls: "bg-card-4" },
-    { label: "Total Evaluations", value: totalEvaluations, icon: "bi-clipboard-data", cls: "bg-card-5" }
+    { label: "Total Credited Subjects", value: totalCredited, icon: "bi-award", cls: "bg-card-5" }
   ];
   document.getElementById("summary-cards").innerHTML = cards
     .map(
@@ -77,54 +78,53 @@ function renderSummaryCards({ totalStudents, evaluated, pending, totalSubjects, 
     .join("");
 }
 
-function renderStatsList({ totalStudents, evaluated, pending, totalSubjects, totalEvaluations }) {
-  const rate = totalStudents ? Math.round((evaluated / totalStudents) * 100) : 0;
-  const avgEvalPerSubject = totalSubjects ? (totalEvaluations / totalSubjects).toFixed(1) : "0.0";
+function renderStatsList({ totalStudents, graduated, inProgress, pending, totalSubjects, totalCredited }) {
+  const rate = totalStudents ? Math.round((graduated / totalStudents) * 100) : 0;
+  const avgCreditedPerStudent = totalStudents ? (totalCredited / totalStudents).toFixed(1) : "0.0";
   document.getElementById("stats-list").innerHTML = `
-    <li class="list-group-item d-flex justify-content-between"><span>Evaluation completion rate</span><strong>${rate}%</strong></li>
-    <li class="list-group-item d-flex justify-content-between"><span>Avg. evaluations per subject</span><strong>${avgEvalPerSubject}</strong></li>
-    <li class="list-group-item d-flex justify-content-between"><span>Students pending evaluation</span><strong>${pending}</strong></li>`;
+    <li class="list-group-item d-flex justify-content-between"><span>Graduation rate</span><strong>${rate}%</strong></li>
+    <li class="list-group-item d-flex justify-content-between"><span>Avg. credited subjects per student</span><strong>${avgCreditedPerStudent}</strong></li>
+    <li class="list-group-item d-flex justify-content-between"><span>Students pending credit review</span><strong>${pending}</strong></li>`;
 }
 
 let statusChartInstance = null;
-function renderStatusChart(evaluated, pending) {
+function renderStatusChart(graduated, inProgress, pending) {
   const ctx = document.getElementById("statusChart");
   if (!ctx || typeof Chart === "undefined") return;
   if (statusChartInstance) statusChartInstance.destroy();
   statusChartInstance = new Chart(ctx, {
     type: "doughnut",
     data: {
-      labels: ["Evaluated", "Pending"],
-      datasets: [{ data: [evaluated, pending], backgroundColor: ["#2e9e6a", "#e2a53a"] }]
+      labels: ["Graduated", "In Progress", "Pending"],
+      datasets: [{ data: [graduated, inProgress, pending], backgroundColor: ["#2e9e6a", "#3a86c8", "#e2a53a"] }]
     },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } }
   });
 }
 
-async function loadRecentEvaluations() {
-  const snap = await db.collection("evaluations").orderBy("evaluatedAt", "desc").limit(5).get();
+async function loadRecentCreditedSubjects() {
+  const snap = await db.collection("creditedSubjects").orderBy("creditedAt", "desc").limit(5).get();
   if (snap.empty) {
-    document.getElementById("recent-evaluations").innerHTML = `<div class="text-muted small">No evaluations yet.</div>`;
+    document.getElementById("recent-credits").innerHTML = `<div class="text-muted small">No credited subjects yet.</div>`;
     return;
   }
   const rows = await Promise.all(
     snap.docs.map(async (doc) => {
-      const e = doc.data();
+      const c = doc.data();
       const [studentDoc, subjectDoc] = await Promise.all([
-        db.collection("students").doc(e.studentId).get(),
-        db.collection("subjects").doc(e.subjectId).get()
+        db.collection("students").doc(c.studentId).get(),
+        db.collection("subjects").doc(c.subjectId).get()
       ]);
       return `<tr>
-        <td>${escapeHtml(studentDoc.exists ? studentDoc.data().fullName : e.studentId)}</td>
-        <td>${escapeHtml(subjectDoc.exists ? subjectDoc.data().subjectCode : e.subjectId)}</td>
-        <td>${statusBadge(e.status)}</td>
-        <td class="text-muted small">${formatDateTime(e.evaluatedAt)}</td>
+        <td>${escapeHtml(studentDoc.exists ? studentDoc.data().fullName : c.studentId)}</td>
+        <td>${escapeHtml(subjectDoc.exists ? subjectDoc.data().subjectCode : c.subjectId)}</td>
+        <td class="text-muted small">${formatDateTime(c.creditedAt)}</td>
       </tr>`;
     })
   );
-  document.getElementById("recent-evaluations").innerHTML = `
+  document.getElementById("recent-credits").innerHTML = `
     <div class="table-responsive"><table class="table table-sm align-middle mb-0">
-      <thead><tr><th>Student</th><th>Subject</th><th>Status</th><th>When</th></tr></thead>
+      <thead><tr><th>Student</th><th>Subject</th><th>When</th></tr></thead>
       <tbody>${rows.join("")}</tbody>
     </table></div>`;
 }
