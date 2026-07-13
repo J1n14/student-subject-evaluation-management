@@ -29,6 +29,9 @@ firebase/
   create-admin.js      One-time script: creates the first Admin account
   seed-old-curriculum.js  One-time script: bulk-seeds the Old-curriculum
                        subject catalog (run again after editing its list)
+  seed-new-curriculum.js  One-time script: bulk-seeds the New-curriculum
+                       subject catalog, reusing/updating any matching
+                       legacy (untagged) subjects and deleting the rest
   serviceAccountKey.json   Admin SDK credential (gitignored, not committed)
 firebase.json          Hosting/deploy config (stays at project root - required
                        by the Firebase CLI)
@@ -187,6 +190,12 @@ Notes:
   subject catalog (all three tracks: Network Technology, Business Analytics,
   Service Management) using deterministic `old_<Code>` doc IDs, so re-running
   it after editing the list only updates existing rows.
+- `firebase/seed-new-curriculum.js` does the same for the New curriculum. It
+  additionally reconciles the app's original 57 untagged demo subjects: any
+  whose code matches an official New-curriculum course is updated in place
+  (preserving its doc ID, so existing assignments/credits stay valid);
+  everything else is deleted along with its assignments/credited-subject
+  records, since it wasn't part of either official curriculum.
 
 ## 8. Security model summary
 
