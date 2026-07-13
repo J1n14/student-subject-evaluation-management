@@ -1,20 +1,18 @@
 /**
  * One-time script: seeds the New-curriculum BSIT subject catalog (Batangas
- * State University, JPLPC Malvar Campus, AY 2021-2022) across all three
- * tracks into the `subjects` collection.
+ * State University, Golden Country Homes / Alangilan campus) into the
+ * `subjects` collection. This curriculum has no track split - every
+ * subject applies to every track ("All Tracks").
  *
- * The catalog had 57 untagged "legacy" subjects left over from before the
- * Credit Evaluation feature existed. Where one of those legacy subjects has
- * the same subjectCode as a course in this official curriculum, its
- * document is UPDATED in place (preserving its doc ID, so any existing
- * assignments/credits stay valid) instead of creating a duplicate. Legacy
- * subjects whose code appears in neither official curriculum (Old or New)
- * are deleted outright, along with any assignments/credited-subject records
- * tied to them.
- *
- * Brand-new subjects (no matching legacy doc) get deterministic doc IDs
- * (`new_<CodeWithoutSpaces>`) with `{ merge: true }`, so re-running this
- * script is safe.
+ * The app's original 57 untagged "legacy" subjects (created before the
+ * Credit Evaluation feature existed) turned out to BE this exact
+ * curriculum, just missing prerequisites/track/curriculum tags. Where a
+ * legacy subject's code matches a course here, its document is updated in
+ * place (preserving its doc ID, so any existing assignments/credits stay
+ * valid) instead of creating a duplicate. Anything tagged curriculum:"New"
+ * that doesn't belong to this curriculum is deleted, along with any
+ * assignments/credited-subject records tied to it - this makes the script
+ * safe to re-run even after a bad previous seed.
  *
  * Requires serviceAccountKey.json (same as create-admin.js).
  *
@@ -30,99 +28,91 @@ const db = getFirestore();
 
 const ACADEMIC_YEAR = "2025-2026";
 
-// track: "All Tracks" = shared GE/common/professional courses taken by every
-// BSIT student regardless of track. Track-specific electives use the
-// student's actual track name.
+// This curriculum has no track split (confirmed) - every subject applies
+// to every track.
+const TRACK = "All Tracks";
+
 const SUBJECTS = [
-  // ---- Year 1, 1st Semester (shared) ----
-  { subjectCode: "IT 111", subjectName: "Introduction to Computing", units: 3, yearLevel: "1st Year", semester: "1st Semester", track: "All Tracks", prerequisite: "" },
-  { subjectCode: "GEd 102", subjectName: "Mathematics in the Modern World", units: 3, yearLevel: "1st Year", semester: "1st Semester", track: "All Tracks", prerequisite: "" },
-  { subjectCode: "GEd 108", subjectName: "Art Appreciation", units: 3, yearLevel: "1st Year", semester: "1st Semester", track: "All Tracks", prerequisite: "" },
-  { subjectCode: "FILI 101", subjectName: "Kontekstwalisadong Komunikasyon sa Filipino", units: 3, yearLevel: "1st Year", semester: "1st Semester", track: "All Tracks", prerequisite: "" },
-  { subjectCode: "PATHFit 1", subjectName: "Movement Competency Training", units: 2, yearLevel: "1st Year", semester: "1st Semester", track: "All Tracks", prerequisite: "" },
-  { subjectCode: "NSTP 111", subjectName: "National Service Training Program 1", units: 3, yearLevel: "1st Year", semester: "1st Semester", track: "All Tracks", prerequisite: "" },
-  { subjectCode: "GEd 103", subjectName: "The Life and Works of Rizal", units: 3, yearLevel: "1st Year", semester: "1st Semester", track: "All Tracks", prerequisite: "" },
-  { subjectCode: "GEd 104", subjectName: "The Contemporary World", units: 3, yearLevel: "1st Year", semester: "1st Semester", track: "All Tracks", prerequisite: "" },
+  // ---- Year 1, 1st Semester ----
+  { subjectCode: "CC 100", subjectName: "Introduction to Computing", units: 3, yearLevel: "1st Year", semester: "1st Semester", prerequisite: "" },
+  { subjectCode: "CC 101", subjectName: "Computer Programming", units: 3, yearLevel: "1st Year", semester: "1st Semester", prerequisite: "" },
+  { subjectCode: "MATH 101", subjectName: "Differential Calculus", units: 4, yearLevel: "1st Year", semester: "1st Semester", prerequisite: "" },
+  { subjectCode: "GEd 101", subjectName: "Understanding the Self", units: 3, yearLevel: "1st Year", semester: "1st Semester", prerequisite: "" },
+  { subjectCode: "GEd 102", subjectName: "Mathematics in the Modern World", units: 3, yearLevel: "1st Year", semester: "1st Semester", prerequisite: "" },
+  { subjectCode: "GEd 105", subjectName: "Readings in Philippine History", units: 3, yearLevel: "1st Year", semester: "1st Semester", prerequisite: "" },
+  { subjectCode: "PATHFit 1", subjectName: "Movement Competency Training", units: 2, yearLevel: "1st Year", semester: "1st Semester", prerequisite: "" },
+  { subjectCode: "NSTP 111", subjectName: "National Service Training Program 1", units: 3, yearLevel: "1st Year", semester: "1st Semester", prerequisite: "" },
 
-  // ---- Year 1, 2nd Semester (shared) ----
-  { subjectCode: "CS 111", subjectName: "Computer Programming", units: 3, yearLevel: "1st Year", semester: "2nd Semester", track: "All Tracks", prerequisite: "IT 111" },
-  { subjectCode: "CS 131", subjectName: "Data Structures and Algorithms", units: 3, yearLevel: "1st Year", semester: "2nd Semester", track: "All Tracks", prerequisite: "IT 111" },
-  { subjectCode: "MATH 111", subjectName: "Linear Algebra", units: 3, yearLevel: "1st Year", semester: "2nd Semester", track: "All Tracks", prerequisite: "GEd 102" },
-  { subjectCode: "FILI 102", subjectName: "Filipino sa Iba't Ibang Disiplina", units: 3, yearLevel: "1st Year", semester: "2nd Semester", track: "All Tracks", prerequisite: "" },
-  { subjectCode: "GEd 105", subjectName: "Readings in Philippine History", units: 3, yearLevel: "1st Year", semester: "2nd Semester", track: "All Tracks", prerequisite: "" },
-  { subjectCode: "GEd 109", subjectName: "Science, Technology and Society", units: 3, yearLevel: "1st Year", semester: "2nd Semester", track: "All Tracks", prerequisite: "" },
-  { subjectCode: "PATHFit 2", subjectName: "Exercise-Based Fitness Activities", units: 2, yearLevel: "1st Year", semester: "2nd Semester", track: "All Tracks", prerequisite: "PATHFit 1" },
-  { subjectCode: "NSTP 121", subjectName: "National Service Training Program 2", units: 3, yearLevel: "1st Year", semester: "2nd Semester", track: "All Tracks", prerequisite: "NSTP 111" },
+  // ---- Year 1, 2nd Semester ----
+  { subjectCode: "CC 102", subjectName: "Advanced Computer Programming", units: 3, yearLevel: "1st Year", semester: "2nd Semester", prerequisite: "CC 100, CC 101" },
+  { subjectCode: "CC 103", subjectName: "Data Structures and Algorithms", units: 3, yearLevel: "1st Year", semester: "2nd Semester", prerequisite: "CC 100, CC 101" },
+  { subjectCode: "CpE 405", subjectName: "Discrete Mathematics", units: 3, yearLevel: "1st Year", semester: "2nd Semester", prerequisite: "MATH 101" },
+  { subjectCode: "MATH 102", subjectName: "Integral Calculus", units: 4, yearLevel: "1st Year", semester: "2nd Semester", prerequisite: "MATH 101" },
+  { subjectCode: "GEd 108", subjectName: "Art Appreciation", units: 3, yearLevel: "1st Year", semester: "2nd Semester", prerequisite: "" },
+  { subjectCode: "GEd 109", subjectName: "Science, Technology and Society", units: 3, yearLevel: "1st Year", semester: "2nd Semester", prerequisite: "" },
+  { subjectCode: "PATHFit 2", subjectName: "Exercise-Based Fitness Activities", units: 2, yearLevel: "1st Year", semester: "2nd Semester", prerequisite: "PATHFit 1" },
+  { subjectCode: "NSTP 121", subjectName: "National Service Training Program 2", units: 3, yearLevel: "1st Year", semester: "2nd Semester", prerequisite: "NSTP 111" },
 
-  // ---- Year 2, 1st Semester (shared) ----
-  { subjectCode: "CS 121", subjectName: "Advanced Computer Programming", units: 3, yearLevel: "2nd Year", semester: "1st Semester", track: "All Tracks", prerequisite: "CS 111" },
-  { subjectCode: "IT 211", subjectName: "Database Management System", units: 3, yearLevel: "2nd Year", semester: "1st Semester", track: "All Tracks", prerequisite: "CS 111" },
-  { subjectCode: "CS 211", subjectName: "Object-Oriented Programming", units: 3, yearLevel: "2nd Year", semester: "1st Semester", track: "All Tracks", prerequisite: "CS 111, CS 131" },
-  { subjectCode: "LITR 102", subjectName: "ASEAN Literature", units: 3, yearLevel: "2nd Year", semester: "1st Semester", track: "All Tracks", prerequisite: "" },
-  { subjectCode: "CpE 405", subjectName: "Discrete Mathematics", units: 3, yearLevel: "2nd Year", semester: "1st Semester", track: "All Tracks", prerequisite: "MATH 111" },
-  { subjectCode: "PHY 101", subjectName: "Calculus Based Physics", units: 3, yearLevel: "2nd Year", semester: "1st Semester", track: "All Tracks", prerequisite: "MATH 111" },
-  { subjectCode: "IT 212", subjectName: "Computer Networking 1", units: 3, yearLevel: "2nd Year", semester: "1st Semester", track: "All Tracks", prerequisite: "IT 111" },
-  { subjectCode: "PATHFit 3", subjectName: "Traditional and Recreational Games", units: 2, yearLevel: "2nd Year", semester: "1st Semester", track: "All Tracks", prerequisite: "PATHFit 1, PATHFit 2" },
+  // ---- Year 2, 1st Semester ----
+  { subjectCode: "CC 104", subjectName: "Information Management", units: 3, yearLevel: "2nd Year", semester: "1st Semester", prerequisite: "CC 103" },
+  { subjectCode: "OOP 101", subjectName: "Object-Oriented Programming", units: 3, yearLevel: "2nd Year", semester: "1st Semester", prerequisite: "CC 102, CC 103" },
+  { subjectCode: "PT 101", subjectName: "Platform Technologies", units: 3, yearLevel: "2nd Year", semester: "1st Semester", prerequisite: "CC 102, CC 103" },
+  { subjectCode: "NET 101", subjectName: "Fundamentals of Computer Networking", units: 3, yearLevel: "2nd Year", semester: "1st Semester", prerequisite: "CC 100" },
+  { subjectCode: "PHYS 111", subjectName: "General Physics 1", units: 3, yearLevel: "2nd Year", semester: "1st Semester", prerequisite: "MATH 101" },
+  { subjectCode: "AI 101", subjectName: "Linear Algebra for AI", units: 3, yearLevel: "2nd Year", semester: "1st Semester", prerequisite: "" },
+  { subjectCode: "GEd 107", subjectName: "Ethics", units: 3, yearLevel: "2nd Year", semester: "1st Semester", prerequisite: "" },
+  { subjectCode: "PATHFit 3", subjectName: "Choice of Dance, Sports, Martial Arts, Group Exercise, Outdoor, and Adventure Activities 1", units: 2, yearLevel: "2nd Year", semester: "1st Semester", prerequisite: "PATHFit 1, PATHFit 2" },
 
-  // ---- Year 2, 2nd Semester (shared) ----
-  { subjectCode: "IT 221", subjectName: "Information Management", units: 3, yearLevel: "2nd Year", semester: "2nd Semester", track: "All Tracks", prerequisite: "IT 111" },
-  { subjectCode: "IT 223", subjectName: "Computer Networking 2", units: 3, yearLevel: "2nd Year", semester: "2nd Semester", track: "All Tracks", prerequisite: "IT 212" },
-  { subjectCode: "IT 222", subjectName: "Advanced Database Management System", units: 3, yearLevel: "2nd Year", semester: "2nd Semester", track: "All Tracks", prerequisite: "IT 211" },
-  { subjectCode: "MATH 408", subjectName: "Data Analysis", units: 3, yearLevel: "2nd Year", semester: "2nd Semester", track: "All Tracks", prerequisite: "MATH 111" },
-  { subjectCode: "ES 101", subjectName: "Environmental Sciences", units: 3, yearLevel: "2nd Year", semester: "2nd Semester", track: "All Tracks", prerequisite: "PHY 101" },
-  { subjectCode: "GEd 106", subjectName: "Purposive Communication", units: 3, yearLevel: "2nd Year", semester: "2nd Semester", track: "All Tracks", prerequisite: "" },
-  { subjectCode: "GEd 101", subjectName: "Understanding the Self", units: 3, yearLevel: "2nd Year", semester: "2nd Semester", track: "All Tracks", prerequisite: "" },
-  { subjectCode: "PATHFit 4", subjectName: "Team Sports (Basketball and Volleyball)", units: 2, yearLevel: "2nd Year", semester: "2nd Semester", track: "All Tracks", prerequisite: "PATHFit 1, PATHFit 2" },
+  // ---- Year 2, 2nd Semester ----
+  { subjectCode: "DB 101", subjectName: "Database Management System", units: 3, yearLevel: "2nd Year", semester: "2nd Semester", prerequisite: "CC 104" },
+  { subjectCode: "NET 102", subjectName: "Advanced Computer Networking", units: 3, yearLevel: "2nd Year", semester: "2nd Semester", prerequisite: "CC 102, NET 101" },
+  { subjectCode: "SAM 101", subjectName: "System Administration and Maintenance", units: 3, yearLevel: "2nd Year", semester: "2nd Semester", prerequisite: "CC 104, NET 101" },
+  { subjectCode: "PHYS 112", subjectName: "General Physics 2", units: 3, yearLevel: "2nd Year", semester: "2nd Semester", prerequisite: "PHYS 111" },
+  { subjectCode: "AI 102", subjectName: "Probability and Statistics for AI", units: 3, yearLevel: "2nd Year", semester: "2nd Semester", prerequisite: "MATH 102" },
+  { subjectCode: "GEd 104", subjectName: "The Contemporary World", units: 3, yearLevel: "2nd Year", semester: "2nd Semester", prerequisite: "" },
+  { subjectCode: "GEd 106", subjectName: "Purposive Communication", units: 3, yearLevel: "2nd Year", semester: "2nd Semester", prerequisite: "" },
+  { subjectCode: "PATHFit 4", subjectName: "Choice of Dance, Sports, Martial Arts, Group Exercise, Outdoor, and Adventure Activities 2", units: 2, yearLevel: "2nd Year", semester: "2nd Semester", prerequisite: "PATHFit 1, PATHFit 2" },
 
-  // ---- Year 3, 1st Semester (shared) ----
-  { subjectCode: "IT 311", subjectName: "Systems Administration and Maintenance", units: 3, yearLevel: "3rd Year", semester: "1st Semester", track: "All Tracks", prerequisite: "IT 221, IT 222" },
-  { subjectCode: "IT 312", subjectName: "System Integration and Architecture", units: 3, yearLevel: "3rd Year", semester: "1st Semester", track: "All Tracks", prerequisite: "CS 131" },
-  { subjectCode: "IT 313", subjectName: "System Analysis and Design", units: 3, yearLevel: "3rd Year", semester: "1st Semester", track: "All Tracks", prerequisite: "IT 222" },
-  { subjectCode: "IT 314", subjectName: "Web Systems and Technologies", units: 3, yearLevel: "3rd Year", semester: "1st Semester", track: "All Tracks", prerequisite: "CS 211" },
-  { subjectCode: "GEd 107", subjectName: "Ethics", units: 3, yearLevel: "3rd Year", semester: "1st Semester", track: "All Tracks", prerequisite: "" },
+  // ---- Year 2, Midterm ----
+  { subjectCode: "CSAI 100", subjectName: "Artificial Intelligence", units: 3, yearLevel: "2nd Year", semester: "Midterm", prerequisite: "AI 101, AI 102, CpE 405" },
+  { subjectCode: "QM 101", subjectName: "Quantitative Methods", units: 3, yearLevel: "2nd Year", semester: "Midterm", prerequisite: "AI 102, CpE 405" },
 
-  // ---- Year 3, 1st Semester (track electives) ----
-  { subjectCode: "NTT 401", subjectName: "Computer Networking 3", units: 3, yearLevel: "3rd Year", semester: "1st Semester", track: "Network Technology", prerequisite: "IT 223" },
-  { subjectCode: "NTT 402", subjectName: "Internet of Things (IoT)", units: 3, yearLevel: "3rd Year", semester: "1st Semester", track: "Network Technology", prerequisite: "IT 223" },
-  { subjectCode: "BAT 401", subjectName: "Fundamentals of Business Analytics", units: 3, yearLevel: "3rd Year", semester: "1st Semester", track: "Business Analytics", prerequisite: "IT 221, IT 222" },
-  { subjectCode: "BAT 402", subjectName: "Fundamentals of Analytics Modeling", units: 3, yearLevel: "3rd Year", semester: "1st Semester", track: "Business Analytics", prerequisite: "IT 221, IT 222" },
-  { subjectCode: "SMT 401", subjectName: "Fundamentals of Business Process Outsourcing 101", units: 3, yearLevel: "3rd Year", semester: "1st Semester", track: "Service Management", prerequisite: "IT 221" },
-  { subjectCode: "SMT 402", subjectName: "Business Communication", units: 3, yearLevel: "3rd Year", semester: "1st Semester", track: "Service Management", prerequisite: "IT 221" },
+  // ---- Year 3, 1st Semester ----
+  { subjectCode: "DB 102", subjectName: "Advanced Database Management System", units: 3, yearLevel: "3rd Year", semester: "1st Semester", prerequisite: "DB 101" },
+  { subjectCode: "IAS 101", subjectName: "Information Assurance and Security", units: 3, yearLevel: "3rd Year", semester: "1st Semester", prerequisite: "NET 101, CC 101" },
+  { subjectCode: "SIA 101", subjectName: "System Integration and Architecture", units: 3, yearLevel: "3rd Year", semester: "1st Semester", prerequisite: "SAM 101" },
+  { subjectCode: "SAD 101", subjectName: "Systems Analysis and Design", units: 3, yearLevel: "3rd Year", semester: "1st Semester", prerequisite: "DB 101, OOP 101" },
+  { subjectCode: "HCI 101", subjectName: "Human-Computer Interaction", units: 3, yearLevel: "3rd Year", semester: "1st Semester", prerequisite: "CC 102" },
+  { subjectCode: "AI 103", subjectName: "Machine Learning and Neural Networks", units: 3, yearLevel: "3rd Year", semester: "1st Semester", prerequisite: "CSAI 100, CC 102" },
+  { subjectCode: "GEd 110", subjectName: "Advanced Technical Writing", units: 3, yearLevel: "3rd Year", semester: "1st Semester", prerequisite: "" },
 
-  // ---- Year 3, 2nd Semester (shared) ----
-  { subjectCode: "IT 321", subjectName: "Human-computer Interaction", units: 3, yearLevel: "3rd Year", semester: "2nd Semester", track: "All Tracks", prerequisite: "IT 314" },
-  { subjectCode: "IT 322", subjectName: "Advanced System Integration and Architecture", units: 3, yearLevel: "3rd Year", semester: "2nd Semester", track: "All Tracks", prerequisite: "IT 312" },
-  { subjectCode: "IT 323", subjectName: "Information Assurance and Security", units: 3, yearLevel: "3rd Year", semester: "2nd Semester", track: "All Tracks", prerequisite: "IT 223" },
-  { subjectCode: "IT 324", subjectName: "Capstone Project 1", units: 3, yearLevel: "3rd Year", semester: "2nd Semester", track: "All Tracks", prerequisite: "" }, // prereq is standing "3rd Year Standing", not a subject code
-  { subjectCode: "IT 325", subjectName: "IT Project Management", units: 3, yearLevel: "3rd Year", semester: "2nd Semester", track: "All Tracks", prerequisite: "IT 313" },
+  // ---- Year 3, 2nd Semester ----
+  { subjectCode: "CP 101", subjectName: "Capstone Project 1", units: 3, yearLevel: "3rd Year", semester: "2nd Semester", prerequisite: "" }, // prereq is standing "3rd Year Standing", not a subject code
+  { subjectCode: "IAS 102", subjectName: "Advanced Information Assurance and Security", units: 3, yearLevel: "3rd Year", semester: "2nd Semester", prerequisite: "IAS 101" },
+  { subjectCode: "SIA 102", subjectName: "Advanced System Integration and Architecture", units: 3, yearLevel: "3rd Year", semester: "2nd Semester", prerequisite: "SIA 101" },
+  { subjectCode: "IPT 101", subjectName: "Integrative Programming and Technologies", units: 3, yearLevel: "3rd Year", semester: "2nd Semester", prerequisite: "SAD 101" },
+  { subjectCode: "WS 101", subjectName: "Web Systems and Technologies", units: 3, yearLevel: "3rd Year", semester: "2nd Semester", prerequisite: "CC 104, OOP 101" },
+  { subjectCode: "ELEC 101", subjectName: "Professional Elective 1", units: 3, yearLevel: "3rd Year", semester: "2nd Semester", prerequisite: "" }, // prereq is standing "3rd Year Standing"
+  { subjectCode: "GEd 111", subjectName: "Advanced Oral Communication", units: 3, yearLevel: "3rd Year", semester: "2nd Semester", prerequisite: "" },
 
-  // ---- Year 3, 2nd Semester (track electives) ----
-  { subjectCode: "NTT 403", subjectName: "Computer Networking 4", units: 3, yearLevel: "3rd Year", semester: "2nd Semester", track: "Network Technology", prerequisite: "NTT 401" },
-  { subjectCode: "NTT 404", subjectName: "Cloud Computing", units: 3, yearLevel: "3rd Year", semester: "2nd Semester", track: "Network Technology", prerequisite: "NTT 402" },
-  { subjectCode: "BAT 403", subjectName: "Fundamentals of Enterprise Data Management", units: 3, yearLevel: "3rd Year", semester: "2nd Semester", track: "Business Analytics", prerequisite: "BAT 401" },
-  { subjectCode: "BAT 404", subjectName: "Analytics Techniques & Tools", units: 3, yearLevel: "3rd Year", semester: "2nd Semester", track: "Business Analytics", prerequisite: "BAT 402" },
-  { subjectCode: "SMT 403", subjectName: "Fundamentals of Business Process Outsourcing 102", units: 3, yearLevel: "3rd Year", semester: "2nd Semester", track: "Service Management", prerequisite: "SMT 401" },
-  { subjectCode: "SMT 404", subjectName: "Service Culture", units: 3, yearLevel: "3rd Year", semester: "2nd Semester", track: "Service Management", prerequisite: "SMT 401" },
+  // ---- Year 3, Midterm ----
+  { subjectCode: "ITPM 101", subjectName: "IT Project Management", units: 3, yearLevel: "3rd Year", semester: "Midterm", prerequisite: "SAD 101" },
+  { subjectCode: "SQA 101", subjectName: "System Quality Assurance", units: 3, yearLevel: "3rd Year", semester: "Midterm", prerequisite: "SAD 101" },
 
-  // ---- Year 3, Midterm (shared) ----
-  { subjectCode: "IT 331", subjectName: "Application Development and Emerging Technologies", units: 3, yearLevel: "3rd Year", semester: "Midterm", track: "All Tracks", prerequisite: "IT 321" },
-  { subjectCode: "IT 332", subjectName: "Integrative Programming and Technologies", units: 3, yearLevel: "3rd Year", semester: "Midterm", track: "All Tracks", prerequisite: "IT 314" },
+  // ---- Year 4, 1st Semester ----
+  { subjectCode: "CP 102", subjectName: "Capstone Project 2", units: 3, yearLevel: "4th Year", semester: "1st Semester", prerequisite: "CP 101" },
+  { subjectCode: "CC 105", subjectName: "Application Development and Emerging Technologies", units: 3, yearLevel: "4th Year", semester: "1st Semester", prerequisite: "OOP 101" },
+  { subjectCode: "SIP 101", subjectName: "Social Issues and Professional Practice", units: 3, yearLevel: "4th Year", semester: "1st Semester", prerequisite: "CC 100" },
+  { subjectCode: "ELEC 102", subjectName: "Professional Elective 2", units: 3, yearLevel: "4th Year", semester: "1st Semester", prerequisite: "" }, // prereq is standing "4th Year Standing"
+  { subjectCode: "ELEC 103", subjectName: "Professional Elective 3", units: 3, yearLevel: "4th Year", semester: "1st Semester", prerequisite: "" }, // prereq is standing "4th Year Standing"
+  { subjectCode: "ENGG 105", subjectName: "Technopreneurship", units: 3, yearLevel: "4th Year", semester: "1st Semester", prerequisite: "" },
+  { subjectCode: "GEd 103", subjectName: "The Life and Works of Rizal", units: 3, yearLevel: "4th Year", semester: "1st Semester", prerequisite: "" },
 
-  // ---- Year 4, 1st Semester (shared) ----
-  { subjectCode: "CS 423", subjectName: "Social Issues and Professional Practice", units: 3, yearLevel: "4th Year", semester: "1st Semester", track: "All Tracks", prerequisite: "" },
-  { subjectCode: "IT 411", subjectName: "Capstone Project 2", units: 3, yearLevel: "4th Year", semester: "1st Semester", track: "All Tracks", prerequisite: "IT 324" },
-  { subjectCode: "ENGG 405", subjectName: "Technopreneurship", units: 3, yearLevel: "4th Year", semester: "1st Semester", track: "All Tracks", prerequisite: "" },
-  { subjectCode: "IT 413", subjectName: "Advanced Information Assurance and Security", units: 3, yearLevel: "4th Year", semester: "1st Semester", track: "All Tracks", prerequisite: "IT 323" },
-  { subjectCode: "IT 414", subjectName: "System Quality Assurance", units: 3, yearLevel: "4th Year", semester: "1st Semester", track: "All Tracks", prerequisite: "IT 325" },
-  { subjectCode: "IT 412", subjectName: "Platform Technologies", units: 3, yearLevel: "4th Year", semester: "1st Semester", track: "All Tracks", prerequisite: "IT 332" },
-
-  // ---- Year 4, 1st Semester (track electives) ----
-  { subjectCode: "NTT 405", subjectName: "Cybersecurity", units: 3, yearLevel: "4th Year", semester: "1st Semester", track: "Network Technology", prerequisite: "NTT 403" },
-  { subjectCode: "BAT 405", subjectName: "Analytics Application", units: 3, yearLevel: "4th Year", semester: "1st Semester", track: "Business Analytics", prerequisite: "BAT 404" },
-  { subjectCode: "SMT 405", subjectName: "Principles of System Thinking", units: 3, yearLevel: "4th Year", semester: "1st Semester", track: "Service Management", prerequisite: "SMT 403" },
-
-  // ---- Year 4, 2nd Semester (shared) ----
-  { subjectCode: "IT 421", subjectName: "Internship Training", units: 6, yearLevel: "4th Year", semester: "2nd Semester", track: "All Tracks", prerequisite: "" } // prereq is standing "4th Year Standing", not a subject code
+  // ---- Year 4, 2nd Semester ----
+  // NOTE: this page of the source document wasn't available; code/details
+  // are inferred to match the other two curricula's Internship course.
+  // Correct via the Subjects panel if the real code/units differ.
+  { subjectCode: "OJT 101", subjectName: "Internship Training", units: 6, yearLevel: "4th Year", semester: "2nd Semester", prerequisite: "" }
 ];
 
 async function cascadeDelete(batch, subjectId) {
@@ -138,26 +128,36 @@ async function main() {
   const snap = await db.collection("subjects").get();
   const allDocs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-  // Only untagged (pre-existing, no curriculum field) docs are eligible to be
-  // reused/updated in place - never touch anything already tagged "Old".
-  const legacyByCode = new Map();
+  const targetCodes = new Set(SUBJECTS.map((s) => s.subjectCode));
+  const existingNewByCode = new Map();
   allDocs.forEach((d) => {
-    if (!d.curriculum) legacyByCode.set(d.subjectCode, d);
+    if (d.curriculum === "New") existingNewByCode.set(d.subjectCode, d);
+    if (!d.curriculum) existingNewByCode.set(d.subjectCode, d); // legacy untagged docs are New-curriculum candidates too
   });
 
-  const newCodes = new Set(SUBJECTS.map((s) => s.subjectCode));
-
   const batch = db.batch();
-  let updatedCount = 0;
-  let createdCount = 0;
+  let deletedWrong = 0;
+  let reused = 0;
+  let created = 0;
 
+  // 1) Remove every "New"-tagged doc that doesn't belong to this curriculum.
+  for (const d of allDocs) {
+    if (d.curriculum === "New" && !targetCodes.has(d.subjectCode)) {
+      batch.delete(db.collection("subjects").doc(d.id));
+      await cascadeDelete(batch, d.id);
+      deletedWrong++;
+    }
+  }
+
+  // 2) Upsert the correct New-curriculum subjects.
   for (const s of SUBJECTS) {
-    const legacyMatch = legacyByCode.get(s.subjectCode);
-    const ref = legacyMatch ? db.collection("subjects").doc(legacyMatch.id) : db.collection("subjects").doc(`new_${s.subjectCode.replace(/\s+/g, "")}`);
+    const existing = existingNewByCode.get(s.subjectCode);
+    const ref = existing ? db.collection("subjects").doc(existing.id) : db.collection("subjects").doc(`new_${s.subjectCode.replace(/\s+/g, "")}`);
     batch.set(
       ref,
       {
         ...s,
+        track: TRACK,
         curriculum: "New",
         academicYear: ACADEMIC_YEAR,
         status: "Active",
@@ -166,20 +166,12 @@ async function main() {
       },
       { merge: true }
     );
-    if (legacyMatch) updatedCount++;
-    else createdCount++;
-  }
-
-  // Delete every untagged legacy subject whose code isn't part of this
-  // official curriculum - it's ad-hoc placeholder data, not a real course.
-  const toDelete = allDocs.filter((d) => !d.curriculum && !newCodes.has(d.subjectCode));
-  for (const d of toDelete) {
-    batch.delete(db.collection("subjects").doc(d.id));
-    await cascadeDelete(batch, d.id);
+    if (existing) reused++;
+    else created++;
   }
 
   await batch.commit();
-  console.log(`Updated ${updatedCount} existing subjects, created ${createdCount} new ones, deleted ${toDelete.length} unofficial legacy subjects.`);
+  console.log(`Deleted ${deletedWrong} wrongly-tagged subjects, reused ${reused} existing docs, created ${created} new ones.`);
 }
 
 main().catch((err) => {

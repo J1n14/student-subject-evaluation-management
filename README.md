@@ -190,12 +190,15 @@ Notes:
   subject catalog (all three tracks: Network Technology, Business Analytics,
   Service Management) using deterministic `old_<Code>` doc IDs, so re-running
   it after editing the list only updates existing rows.
-- `firebase/seed-new-curriculum.js` does the same for the New curriculum. It
-  additionally reconciles the app's original 57 untagged demo subjects: any
-  whose code matches an official New-curriculum course is updated in place
-  (preserving its doc ID, so existing assignments/credits stay valid);
-  everything else is deleted along with its assignments/credited-subject
-  records, since it wasn't part of either official curriculum.
+- `firebase/seed-new-curriculum.js` does the same for the New curriculum
+  (Golden Country Homes / Alangilan campus - this curriculum has no track
+  split, every subject is tagged `track: "All Tracks"`). The app's original
+  57 untagged demo subjects turned out to be this exact curriculum; any
+  whose code matches a course here is updated in place (preserving its doc
+  ID, so existing assignments/credits stay valid) rather than duplicated.
+  Re-running this script is safe even after a bad previous seed - anything
+  tagged `curriculum: "New"` that doesn't belong here gets deleted along
+  with its assignments/credited-subject records.
 
 ## 8. Security model summary
 
