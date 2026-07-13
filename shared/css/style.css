@@ -203,6 +203,37 @@ body {
   }
 }
 
+/* ---------- Credit Evaluation (grouped view) ---------- */
+.credit-progress .progress { background: var(--surface-alt); }
+.credit-progress .progress-bar { background: var(--brand); font-size: 0.7rem; font-weight: 600; line-height: 12px; }
+
+.eval-legend { display: flex; align-items: center; flex-wrap: wrap; }
+.legend-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 0.35rem; vertical-align: middle; }
+.legend-dot.legend-open { background: #fff; border: 1px solid #c9c9d6; }
+
+.year-block { border: 1px solid rgba(39, 52, 105, 0.12); border-radius: 12px; overflow: hidden; margin-bottom: 1rem; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04); }
+.year-block.current { border-color: var(--brand); box-shadow: 0 6px 18px rgba(39, 52, 105, 0.12); }
+.year-head { display: flex; justify-content: space-between; align-items: center; background: var(--brand); color: #fff; padding: 0.6rem 1rem; font-weight: 600; }
+.year-block.current .year-head { background: linear-gradient(135deg, var(--brand), var(--brand-dark)); }
+.year-head .year-count { font-size: 0.8rem; font-weight: 500; opacity: 0.9; }
+.year-head .current-pill { background: var(--accent); color: var(--brand-dark); font-size: 0.65rem; vertical-align: middle; }
+
+.sem-group { padding: 0.5rem 1rem 0.75rem; }
+.sem-group + .sem-group { border-top: 1px dashed rgba(39, 52, 105, 0.12); }
+.sem-head { display: flex; align-items: center; gap: 0.5rem; font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--brand); font-weight: 700; margin: 0.5rem 0 0.4rem; }
+.sem-head .sem-count { color: #9a9ab0; font-weight: 600; letter-spacing: 0; }
+
+.subj-list { display: flex; flex-direction: column; gap: 0.25rem; }
+.subj-row { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; padding: 0.5rem 0.65rem; border-radius: 8px; background: #fbfbfe; border: 1px solid rgba(39, 52, 105, 0.06); transition: background 0.12s ease; }
+.subj-row:hover { background: var(--bg-soft); }
+.subj-row.is-credited { background: #f2fbf5; border-color: rgba(25, 135, 84, 0.18); }
+.subj-main { display: flex; flex-direction: column; min-width: 0; }
+.subj-code { font-weight: 700; font-size: 0.85rem; color: var(--brand-dark); }
+.subj-name { font-size: 0.82rem; color: #4a4a5a; overflow: hidden; text-overflow: ellipsis; }
+.subj-meta { display: flex; align-items: center; gap: 0.6rem; flex-shrink: 0; }
+.subj-meta .units { font-size: 0.75rem; color: #9a9ab0; }
+.subj-meta .open-pill { background: #eef0f6; color: #6b6b80; }
+
 /* ---------- Print (Reports) ---------- */
 @media print {
   .no-print { display: none !important; }

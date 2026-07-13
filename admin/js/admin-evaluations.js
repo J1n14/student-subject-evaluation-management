@@ -44,16 +44,9 @@ async function initAdminEvaluations(content) {
                       <input type="text" class="form-control" id="creditedFrom" placeholder="e.g. GE 1102 - Mathematics in the Modern World" required />
                       <div class="invalid-feedback">Required.</div>
                     </div>
-                    <div class="row">
-                      <div class="col-6 mb-3">
-                        <label class="form-label">Grade</label>
-                        <input type="text" class="form-control" id="creditGrade" required />
-                        <div class="invalid-feedback">Required.</div>
-                      </div>
-                      <div class="col-6 mb-3">
-                        <label class="form-label">Remarks</label>
-                        <input type="text" class="form-control" id="creditRemarks" placeholder="Optional" />
-                      </div>
+                    <div class="mb-3">
+                      <label class="form-label">Remarks</label>
+                      <input type="text" class="form-control" id="creditRemarks" placeholder="Optional" />
                     </div>
                   </div>
                   <div class="modal-footer">
@@ -115,109 +108,21 @@ async function selectStudentForCreditEvaluation(studentId) {
   ]);
 
   const creditedDocs = creditedSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const model = buildEvalModel(student, allSubjectsArr, creditedDocs);
 
-  const requiredSubjects = getRequiredSubjects(student, allSubjectsArr);
-  const requiredSubjectsById = Object.fromEntries(requiredSubjects.map((s) => [s.id, s]));
-  const creditedMap = buildCreditedMap(creditedDocs);
+  creditTabState = {
+    student,
+    requiredSubjects: model.required,
+    requiredSubjectsById: model.requiredById,
+    creditedMap: model.creditedMap
+  };
 
-  creditTabState = { student, requiredSubjects, requiredSubjectsById, creditedMap };
-
-  renderCreditEvaluationTab(student, requiredSubjects, creditedMap);
+  renderCreditEvaluation(panel, { student, model, interactive: true });
 }
 
-function renderCreditEvaluationTab(student, requiredSubjects, creditedMap) {
-  const panel = document.getElementById("credit-evaluation-panel");
-
-  const creditedRows = requiredSubjects.filter((s) => creditedMap.has(s.id));
-  const stillToTakeRows = requiredSubjects
-    .filter((s) => !creditedMap.has(s.id))
-    .sort((a, b) => {
-      const yearDiff = YEAR_ORDER.indexOf(a.yearLevel) - YEAR_ORDER.indexOf(b.yearLevel);
-      if (yearDiff !== 0) return yearDiff;
-      if (a.semester !== b.semester) return (a.semester || "").localeCompare(b.semester || "");
-      return (a.subjectCode || "").localeCompare(b.subjectCode || "");
-    });
-
-  const emptyPoolNotice =
-    requiredSubjects.length === 0
-      ? `<div class="alert alert-warning">No catalog subjects found yet for this student's <strong>${escapeOrDash(student.curriculum)} curriculum</strong> / <strong>${escapeOrDash(student.track)} track</strong>. Add matching subjects in the Subjects panel first.</div>`
-      : "";
-
-  panel.innerHTML = `
-    <div class="d-flex justify-content-between align-items-start mb-3">
-      <div>
-        <h5 class="mb-0">${escapeHtml(student.fullName)}</h5>
-      </div>
-      ${statusBadge(student.status || "Pending")}
-    </div>
-
-    ${emptyPoolNotice}
-
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <h6 class="mb-0">Credited Subjects</h6>
-      <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#creditModal" onclick="openCreditModal()">
-        <i class="bi bi-plus-lg me-1"></i>Add Credited Subject
-      </button>
-    </div>
-    <div class="table-responsive mb-4">
-      <table class="table table-sm">
-        <thead><tr><th>Code</th><th>Subject</th><th>Units</th><th>Credited From (transcript)</th><th>Grade</th><th>Remarks</th><th class="text-end">Actions</th></tr></thead>
-        <tbody>
-          ${
-            creditedRows.length
-              ? creditedRows
-                  .map((s) => {
-                    const record = creditedMap.get(s.id);
-                    return `
-                <tr>
-                  <td class="text-nowrap">${escapeHtml(s.subjectCode)}</td>
-                  <td>${escapeHtml(s.subjectName)}</td>
-                  <td>${escapeHtml(s.units)}</td>
-                  <td>${escapeHtml(record.creditedFrom)}</td>
-                  <td>${escapeHtml(record.grade)}</td>
-                  <td>${escapeOrDash(record.remarks)}</td>
-                  <td class="text-end">
-                    <button class="btn btn-sm btn-outline-primary" onclick="openCreditModal('${record.id}')" data-bs-toggle="modal" data-bs-target="#creditModal"><i class="bi bi-pencil"></i></button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteCreditedSubject('${record.id}', '${student.id}')"><i class="bi bi-trash"></i></button>
-                  </td>
-                </tr>`;
-                  })
-                  .join("")
-              : `<tr><td colspan="7" class="text-center text-muted py-3">No credited subjects yet.</td></tr>`
-          }
-        </tbody>
-      </table>
-    </div>
-
-    <h6 class="mb-2">Subjects Still To Take (full path to graduation)</h6>
-    <div class="table-responsive">
-      <table class="table table-sm">
-        <thead><tr><th>Year</th><th>Semester</th><th>Code</th><th>Subject</th><th>Units</th><th>Prerequisite</th><th>Why not credited</th></tr></thead>
-        <tbody>
-          ${
-            stillToTakeRows.length
-              ? stillToTakeRows
-                  .map(
-                    (s) => `
-              <tr>
-                <td class="text-nowrap">${escapeHtml(s.yearLevel)}</td>
-                <td class="text-nowrap">${escapeHtml(s.semester)}</td>
-                <td class="text-nowrap">${escapeHtml(s.subjectCode)}</td>
-                <td>${escapeHtml(s.subjectName)}</td>
-                <td>${escapeHtml(s.units)}</td>
-                <td class="text-nowrap">${escapeOrDash(s.prerequisite)}</td>
-                <td class="small">${getNotCreditedReason(s, creditedMap, creditTabState.requiredSubjectsById)}</td>
-              </tr>`
-                  )
-                  .join("")
-              : `<tr><td colspan="7" class="text-center text-muted py-3">${requiredSubjects.length ? "All required subjects are credited." : "No required subjects to display yet."}</td></tr>`
-          }
-        </tbody>
-      </table>
-    </div>`;
-}
-
-function openCreditModal(creditId) {
+// creditId: edit an existing record. preselectSubjectId: pre-choose a subject
+// (used by the "Mark credited" buttons in the grouped view).
+function openCreditModal(creditId, preselectSubjectId) {
   const form = document.getElementById("credit-form");
   form.classList.remove("was-validated");
   form.reset();
@@ -227,7 +132,9 @@ function openCreditModal(creditId) {
   const { requiredSubjects, creditedMap } = creditTabState;
   const existingRecord = creditId ? [...creditedMap.values()].find((r) => r.id === creditId) : null;
 
-  const eligible = requiredSubjects.filter((s) => !creditedMap.has(s.id) || (existingRecord && s.id === existingRecord.subjectId));
+  const eligible = requiredSubjects.filter(
+    (s) => !creditedMap.has(s.id) || (existingRecord && s.id === existingRecord.subjectId)
+  );
 
   const select = document.getElementById("creditSubjectId");
   if (eligible.length === 0) {
@@ -244,10 +151,10 @@ function openCreditModal(creditId) {
     select.value = existingRecord.subjectId;
     select.disabled = true;
     document.getElementById("creditedFrom").value = existingRecord.creditedFrom || "";
-    document.getElementById("creditGrade").value = existingRecord.grade || "";
     document.getElementById("creditRemarks").value = existingRecord.remarks || "";
   } else {
     select.disabled = false;
+    if (preselectSubjectId) select.value = preselectSubjectId;
   }
 }
 
@@ -268,7 +175,6 @@ async function saveCreditedSubject(e) {
         studentId: student.id,
         subjectId,
         creditedFrom: document.getElementById("creditedFrom").value.trim(),
-        grade: document.getElementById("creditGrade").value.trim(),
         remarks: document.getElementById("creditRemarks").value.trim(),
         creditedBy: auth.currentUser.email,
         creditedAt: serverTimestamp()
