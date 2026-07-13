@@ -14,6 +14,13 @@ async function initAdminSubjects(content) {
             <option value="">All Semesters</option>
             <option>1st Semester</option><option>2nd Semester</option><option>Midterm</option><option>Summer</option>
           </select>
+          <select class="form-select" style="width:180px" id="filter-track">
+            <option value="">Any Track</option>
+            <option>All Tracks</option>
+            <option>Network Technology</option>
+            <option>Service Management</option>
+            <option>Business Analytics</option>
+          </select>
           <select class="form-select" style="width:140px" id="filter-status">
             <option value="">All Status</option>
             <option>Active</option><option>Inactive</option>
@@ -25,7 +32,7 @@ async function initAdminSubjects(content) {
       </div>
       <div class="table-responsive" style="max-height: calc(100vh - 260px); min-height: 300px; overflow-y: auto;">
         <table class="table table-hover table-sm align-middle mb-0">
-          <thead class="sticky-top bg-white"><tr><th>Code</th><th>Subject Name</th><th>Units</th><th class="text-nowrap">Year</th><th class="text-nowrap">Semester</th><th class="text-nowrap">A.Y.</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+          <thead class="sticky-top bg-white"><tr><th>Code</th><th>Subject Name</th><th>Units</th><th class="text-nowrap">Year</th><th class="text-nowrap">Track</th><th class="text-nowrap">Semester</th><th class="text-nowrap">A.Y.</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
           <tbody id="subjects-tbody"></tbody>
         </table>
       </div>
@@ -55,12 +62,12 @@ async function initAdminSubjects(content) {
                 <div class="invalid-feedback">Subject name is required.</div>
               </div>
               <div class="row">
-                <div class="col-4 mb-3">
+                <div class="col-6 mb-3">
                   <label class="form-label">Units</label>
                   <input type="number" min="1" max="10" class="form-control" id="units" required />
                   <div class="invalid-feedback">Required.</div>
                 </div>
-                <div class="col-4 mb-3">
+                <div class="col-6 mb-3">
                   <label class="form-label">Year Level</label>
                   <select class="form-select" id="yearLevel" required>
                     <option value="">Select</option>
@@ -68,11 +75,24 @@ async function initAdminSubjects(content) {
                   </select>
                   <div class="invalid-feedback">Required.</div>
                 </div>
-                <div class="col-4 mb-3">
+              </div>
+              <div class="row">
+                <div class="col-6 mb-3">
                   <label class="form-label">Semester</label>
                   <select class="form-select" id="semester" required>
                     <option value="">Select</option>
                     <option>1st Semester</option><option>2nd Semester</option><option>Midterm</option><option>Summer</option>
+                  </select>
+                  <div class="invalid-feedback">Required.</div>
+                </div>
+                <div class="col-6 mb-3">
+                  <label class="form-label">Track</label>
+                  <select class="form-select" id="track" required>
+                    <option value="">Select</option>
+                    <option>All Tracks</option>
+                    <option>Network Technology</option>
+                    <option>Service Management</option>
+                    <option>Business Analytics</option>
                   </select>
                   <div class="invalid-feedback">Required.</div>
                 </div>
@@ -104,6 +124,7 @@ async function initAdminSubjects(content) {
   document.getElementById("search-input").addEventListener("input", debounce(renderSubjectsTable, 250));
   document.getElementById("filter-year").addEventListener("change", renderSubjectsTable);
   document.getElementById("filter-semester").addEventListener("change", renderSubjectsTable);
+  document.getElementById("filter-track").addEventListener("change", renderSubjectsTable);
   document.getElementById("filter-status").addEventListener("change", renderSubjectsTable);
 
   await loadSubjects();
@@ -119,14 +140,16 @@ function renderSubjectsTable() {
   const search = document.getElementById("search-input").value.toLowerCase();
   const yearFilter = document.getElementById("filter-year").value;
   const semFilter = document.getElementById("filter-semester").value;
+  const trackFilter = document.getElementById("filter-track").value;
   const statusFilter = document.getElementById("filter-status").value;
 
   let filtered = allSubjects.filter((s) => {
     const matchesSearch = !search || (s.subjectCode || "").toLowerCase().includes(search) || (s.subjectName || "").toLowerCase().includes(search);
     const matchesYear = !yearFilter || s.yearLevel === yearFilter;
     const matchesSem = !semFilter || s.semester === semFilter;
+    const matchesTrack = !trackFilter || s.track === trackFilter;
     const matchesStatus = !statusFilter || s.status === statusFilter;
-    return matchesSearch && matchesYear && matchesSem && matchesStatus;
+    return matchesSearch && matchesYear && matchesSem && matchesTrack && matchesStatus;
   });
 
   document.getElementById("subjects-tbody").innerHTML = filtered.length
@@ -138,6 +161,7 @@ function renderSubjectsTable() {
       <td>${escapeHtml(s.subjectName)}</td>
       <td>${escapeHtml(s.units)}</td>
       <td class="text-nowrap">${escapeHtml(s.yearLevel)}</td>
+      <td class="text-nowrap">${escapeHtml(s.track)}</td>
       <td class="text-nowrap">${escapeHtml(s.semester)}</td>
       <td class="text-nowrap">${escapeHtml(s.academicYear)}</td>
       <td>${statusBadge(s.status || "Active")}</td>
@@ -148,7 +172,7 @@ function renderSubjectsTable() {
     </tr>`
         )
         .join("")
-    : `<tr><td colspan="8" class="text-center text-muted py-4">No subjects found.</td></tr>`;
+    : `<tr><td colspan="9" class="text-center text-muted py-4">No subjects found.</td></tr>`;
 
   document.getElementById("subjects-count").textContent = `${filtered.length} subject(s)`;
 }
@@ -168,6 +192,7 @@ function openSubjectModal(id) {
     document.getElementById("units").value = s.units || "";
     document.getElementById("yearLevel").value = s.yearLevel || "";
     document.getElementById("semester").value = s.semester || "";
+    document.getElementById("track").value = s.track || "";
     document.getElementById("academicYear").value = s.academicYear || "";
     document.getElementById("status").value = s.status || "Active";
   } else {
@@ -191,6 +216,7 @@ async function saveSubject(e) {
       units: Number(document.getElementById("units").value),
       yearLevel: document.getElementById("yearLevel").value,
       semester: document.getElementById("semester").value,
+      track: document.getElementById("track").value,
       academicYear: document.getElementById("academicYear").value.trim(),
       status: document.getElementById("status").value,
       updatedAt: serverTimestamp()
