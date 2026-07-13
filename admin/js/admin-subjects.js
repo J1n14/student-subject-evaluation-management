@@ -32,7 +32,7 @@ async function initAdminSubjects(content) {
       </div>
       <div class="table-responsive" style="max-height: calc(100vh - 260px); min-height: 300px; overflow-y: auto;">
         <table class="table table-hover table-sm align-middle mb-0">
-          <thead class="sticky-top bg-white"><tr><th>Code</th><th>Subject Name</th><th>Units</th><th class="text-nowrap">Year</th><th class="text-nowrap">Track</th><th class="text-nowrap">Semester</th><th class="text-nowrap">A.Y.</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+          <thead class="sticky-top bg-white"><tr><th>Code</th><th>Subject Name</th><th>Units</th><th class="text-nowrap">Year</th><th class="text-nowrap text-center">Track</th><th class="text-nowrap">Semester</th><th class="text-nowrap">A.Y.</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
           <tbody id="subjects-tbody"></tbody>
         </table>
       </div>
@@ -161,7 +161,7 @@ function renderSubjectsTable() {
       <td>${escapeHtml(s.subjectName)}</td>
       <td>${escapeHtml(s.units)}</td>
       <td class="text-nowrap">${escapeHtml(s.yearLevel)}</td>
-      <td class="text-nowrap">${escapeOrDash(s.track)}</td>
+      <td class="text-nowrap text-center">${escapeOrDash(s.track)}</td>
       <td class="text-nowrap">${escapeHtml(s.semester)}</td>
       <td class="text-nowrap">${escapeHtml(s.academicYear)}</td>
       <td>${statusBadge(s.status || "Active")}</td>
