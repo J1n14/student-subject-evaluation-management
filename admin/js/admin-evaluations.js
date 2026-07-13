@@ -275,13 +275,15 @@ async function getSubjectsCatalog() {
 
 // A subject counts toward a student's plan if it's Active, its curriculum
 // matches the student's (missing curriculum on legacy subjects is treated
-// as "New"), and its track matches the student's track (or is "All Tracks").
+// as "New"), and its track matches the student's track, is "All Tracks", or
+// is unset (legacy subjects created before the Track field existed apply to
+// every track).
 function getRequiredSubjects(student, allSubjectsArr) {
   const studentCurriculum = student.curriculum || "New";
   return allSubjectsArr.filter((s) => {
     const subjCurriculum = s.curriculum || "New";
     const matchesCurriculum = subjCurriculum === studentCurriculum;
-    const matchesTrack = s.track === student.track || s.track === "All Tracks";
+    const matchesTrack = !s.track || s.track === student.track || s.track === "All Tracks";
     const isActive = (s.status || "Active") === "Active";
     return matchesCurriculum && matchesTrack && isActive;
   });
