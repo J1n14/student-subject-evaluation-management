@@ -27,7 +27,7 @@ async function initAdminStudents(content) {
       <div class="table-responsive">
         <table class="table table-hover align-middle">
           <thead>
-            <tr><th>Student ID</th><th>Full Name</th><th>Email</th><th>Track</th><th>Year</th><th>Status</th><th class="text-end">Actions</th></tr>
+            <tr><th>Student ID</th><th>Full Name</th><th>Email</th><th>Source College</th><th>Curriculum</th><th>Track</th><th>Year</th><th>Status</th><th class="text-end">Actions</th></tr>
           </thead>
           <tbody id="students-tbody"></tbody>
         </table>
@@ -169,6 +169,8 @@ function renderStudentsTable() {
       <td>${escapeHtml(s.id)}</td>
       <td>${escapeHtml(s.fullName)}</td>
       <td>${escapeHtml(s.email)}</td>
+      <td>${escapeHtml(s.college)}</td>
+      <td>${s.curriculum ? escapeHtml(s.curriculum) + " Curriculum" : ""}</td>
       <td>${escapeHtml(s.track)}</td>
       <td>${escapeHtml(s.yearLevel)}</td>
       <td>${statusBadge(s.status || "Pending")}</td>
@@ -180,7 +182,7 @@ function renderStudentsTable() {
     </tr>`
         )
         .join("")
-    : `<tr><td colspan="7" class="text-center text-muted py-4">No students found.</td></tr>`;
+    : `<tr><td colspan="9" class="text-center text-muted py-4">No students found.</td></tr>`;
 
   document.getElementById("students-count").textContent = `${total} student(s)`;
   renderPagination(document.getElementById("students-pagination"), studentsPage, totalPages, (p) => {
