@@ -148,11 +148,6 @@ function renderCreditEvaluationTab(student, requiredSubjects, creditedMap, progr
     <div class="d-flex justify-content-between align-items-start mb-3">
       <div>
         <h5 class="mb-0">${escapeHtml(student.fullName)}</h5>
-        <div class="text-muted small">
-          Student No. ${escapeHtml(student.id)} &middot; ${escapeOrDash(student.curriculum)} curriculum &middot;
-          ${escapeOrDash(student.track)} track &middot; Entering ${escapeOrDash(student.yearLevel)} &middot;
-          Evaluated ${formatDate(student.updatedAt)}
-        </div>
       </div>
       ${statusBadge(student.status || "Pending")}
     </div>
