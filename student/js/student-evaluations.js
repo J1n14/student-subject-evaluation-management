@@ -14,7 +14,6 @@ async function initStudentEvaluations(content, profile) {
   const requiredSubjects = getRequiredSubjects(student, allSubjects);
   const requiredSubjectsById = Object.fromEntries(requiredSubjects.map((s) => [s.id, s]));
   const creditedMap = buildCreditedMap(creditedDocs);
-  const progress = computeCreditProgress(requiredSubjects, creditedMap);
 
   const creditedRows = requiredSubjects.filter((s) => creditedMap.has(s.id));
   const stillToTakeRows = requiredSubjects
@@ -41,37 +40,6 @@ async function initStudentEvaluations(content, profile) {
       </div>
 
       ${emptyPoolNotice}
-
-      <div class="row g-3 align-items-center mb-4">
-        <div class="col-auto">${renderProgressRingSvg(progress.overallPercent)}</div>
-        <div class="col">
-          <div class="small text-uppercase text-muted fw-semibold mb-2">Progress by Year Level</div>
-          ${YEAR_ORDER.map((y) => {
-            const { creditedUnits, requiredUnits } = progress.perYear[y];
-            const pct = requiredUnits > 0 ? Math.round((creditedUnits / requiredUnits) * 100) : 0;
-            return `
-            <div class="mb-2">
-              <div class="d-flex justify-content-between small mb-1">
-                <span>${y}</span>
-                <span class="text-muted">${creditedUnits}/${requiredUnits} u</span>
-              </div>
-              <div class="progress" style="height:8px;">
-                <div class="progress-bar" role="progressbar" style="width:${pct}%"></div>
-              </div>
-            </div>`;
-          }).join("")}
-        </div>
-        <div class="col-auto text-center">
-          <div class="d-flex gap-4">
-            <div><div class="fw-bold fs-5">${progress.totalCreditedUnits}</div><div class="small text-muted">credited units</div></div>
-            <div><div class="fw-bold fs-5">${progress.remainingUnits}</div><div class="small text-muted">remaining units</div></div>
-          </div>
-          <div class="progress mt-2" style="height:6px; width:180px;">
-            <div class="progress-bar bg-success" style="width:${progress.overallPercent}%"></div>
-            <div class="progress-bar bg-light border" style="width:${100 - progress.overallPercent}%"></div>
-          </div>
-        </div>
-      </div>
 
       <h6 class="mb-2">Credited Subjects</h6>
       <div class="table-responsive mb-4">

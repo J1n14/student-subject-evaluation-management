@@ -152,35 +152,6 @@ function buildCreditedMap(creditedDocs) {
   return map;
 }
 
-function computeCreditProgress(requiredSubjects, creditedMap) {
-  const perYear = {};
-  YEAR_ORDER.forEach((y) => (perYear[y] = { creditedUnits: 0, requiredUnits: 0 }));
-
-  let totalCreditedUnits = 0;
-  let totalRequiredUnits = 0;
-
-  requiredSubjects.forEach((s) => {
-    const bucket = perYear[s.yearLevel] || (perYear[s.yearLevel] = { creditedUnits: 0, requiredUnits: 0 });
-    const units = Number(s.units) || 0;
-    bucket.requiredUnits += units;
-    totalRequiredUnits += units;
-    if (creditedMap.has(s.id)) {
-      bucket.creditedUnits += units;
-      totalCreditedUnits += units;
-    }
-  });
-
-  const overallPercent = totalRequiredUnits > 0 ? Math.round((totalCreditedUnits / totalRequiredUnits) * 100) : 0;
-
-  return {
-    perYear,
-    totalCreditedUnits,
-    totalRequiredUnits,
-    remainingUnits: Math.max(0, totalRequiredUnits - totalCreditedUnits),
-    overallPercent
-  };
-}
-
 function getNotCreditedReason(subject, creditedMap, requiredSubjectsById) {
   const prereqText = (subject.prerequisite || "").trim();
   if (!prereqText) return "Not yet credited.";
@@ -198,21 +169,6 @@ function getNotCreditedReason(subject, creditedMap, requiredSubjectsById) {
     }
   }
   return "Not yet credited.";
-}
-
-function renderProgressRingSvg(percent) {
-  const radius = 54;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference * (1 - percent / 100);
-  return `
-    <svg width="140" height="140" viewBox="0 0 140 140">
-      <circle cx="70" cy="70" r="${radius}" fill="none" stroke="#e9ecef" stroke-width="12" />
-      <circle cx="70" cy="70" r="${radius}" fill="none" stroke="#0d6efd" stroke-width="12"
-        stroke-linecap="round" stroke-dasharray="${circumference}" stroke-dashoffset="${offset}"
-        transform="rotate(-90 70 70)" />
-      <text x="70" y="65" text-anchor="middle" font-size="24" font-weight="700">${percent}%</text>
-      <text x="70" y="86" text-anchor="middle" font-size="11" fill="#6c757d">of units</text>
-    </svg>`;
 }
 
 // Graduated: every required subject (per curriculum+track) is credited.

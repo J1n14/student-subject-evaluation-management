@@ -119,14 +119,13 @@ async function selectStudentForCreditEvaluation(studentId) {
   const requiredSubjects = getRequiredSubjects(student, allSubjectsArr);
   const requiredSubjectsById = Object.fromEntries(requiredSubjects.map((s) => [s.id, s]));
   const creditedMap = buildCreditedMap(creditedDocs);
-  const progress = computeCreditProgress(requiredSubjects, creditedMap);
 
   creditTabState = { student, requiredSubjects, requiredSubjectsById, creditedMap };
 
-  renderCreditEvaluationTab(student, requiredSubjects, creditedMap, progress);
+  renderCreditEvaluationTab(student, requiredSubjects, creditedMap);
 }
 
-function renderCreditEvaluationTab(student, requiredSubjects, creditedMap, progress) {
+function renderCreditEvaluationTab(student, requiredSubjects, creditedMap) {
   const panel = document.getElementById("credit-evaluation-panel");
 
   const creditedRows = requiredSubjects.filter((s) => creditedMap.has(s.id));
@@ -153,41 +152,6 @@ function renderCreditEvaluationTab(student, requiredSubjects, creditedMap, progr
     </div>
 
     ${emptyPoolNotice}
-
-    <div class="row g-3 align-items-center mb-4">
-      <div class="col-auto">${renderProgressRingSvg(progress.overallPercent)}</div>
-      <div class="col">
-        <div class="small text-uppercase text-muted fw-semibold mb-2">Progress by Year Level</div>
-        ${YEAR_ORDER.map((y) => {
-          const { creditedUnits, requiredUnits } = progress.perYear[y];
-          const pct = requiredUnits > 0 ? Math.round((creditedUnits / requiredUnits) * 100) : 0;
-          return `
-          <div class="mb-2">
-            <div class="d-flex justify-content-between small mb-1">
-              <span>${y}</span>
-              <span class="text-muted">${creditedUnits}/${requiredUnits} u</span>
-            </div>
-            <div class="progress" style="height:8px;">
-              <div class="progress-bar" role="progressbar" style="width:${pct}%"></div>
-            </div>
-          </div>`;
-        }).join("")}
-      </div>
-      <div class="col-auto text-center">
-        <div class="d-flex gap-4">
-          <div><div class="fw-bold fs-5">${progress.totalCreditedUnits}</div><div class="small text-muted">credited units</div></div>
-          <div><div class="fw-bold fs-5">${progress.remainingUnits}</div><div class="small text-muted">remaining units</div></div>
-        </div>
-        <div class="progress mt-2" style="height:6px; width:180px;">
-          <div class="progress-bar bg-success" style="width:${progress.overallPercent}%"></div>
-          <div class="progress-bar bg-light border" style="width:${100 - progress.overallPercent}%"></div>
-        </div>
-        <div class="d-flex gap-3 small mt-1 text-muted justify-content-center">
-          <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#198754;" class="me-1"></span>credited</span>
-          <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#e9ecef;border:1px solid #adb5bd;" class="me-1"></span>remaining</span>
-        </div>
-      </div>
-    </div>
 
     <div class="d-flex justify-content-between align-items-center mb-2">
       <h6 class="mb-0">Credited Subjects</h6>
