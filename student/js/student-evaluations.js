@@ -107,7 +107,7 @@ async function initStudentEvaluations(content, profile) {
       <h6 class="mb-2">Subjects Still To Take (full path to graduation)</h6>
       <div class="table-responsive">
         <table class="table table-sm">
-          <thead><tr><th>Year</th><th>Semester</th><th>Code</th><th>Subject</th><th>Units</th><th>Why not credited</th></tr></thead>
+          <thead><tr><th>Year</th><th>Semester</th><th>Code</th><th>Subject</th><th>Units</th><th>Prerequisite</th><th>Why not credited</th></tr></thead>
           <tbody>
             ${
               stillToTakeRows.length
@@ -120,11 +120,12 @@ async function initStudentEvaluations(content, profile) {
                   <td class="text-nowrap">${escapeHtml(s.subjectCode)}</td>
                   <td>${escapeHtml(s.subjectName)}</td>
                   <td>${escapeHtml(s.units)}</td>
+                  <td class="text-nowrap">${escapeOrDash(s.prerequisite)}</td>
                   <td class="small">${getNotCreditedReason(s, creditedMap, requiredSubjectsById)}</td>
                 </tr>`
                     )
                     .join("")
-                : `<tr><td colspan="6" class="text-center text-muted py-3">${requiredSubjects.length ? "All required subjects are credited." : "No required subjects to display yet."}</td></tr>`
+                : `<tr><td colspan="7" class="text-center text-muted py-3">${requiredSubjects.length ? "All required subjects are credited." : "No required subjects to display yet."}</td></tr>`
             }
           </tbody>
         </table>
