@@ -27,7 +27,7 @@ async function initAdminStudents(content) {
       <div class="table-responsive">
         <table class="table table-hover align-middle">
           <thead>
-            <tr><th>Student ID</th><th>Full Name</th><th>Email</th><th>Source College</th><th>Curriculum</th><th>Track</th><th>Year</th><th>Status</th><th class="text-end">Actions</th></tr>
+            <tr><th>Student ID</th><th>Full Name</th><th>Email</th><th>Source College</th><th>Course</th><th>Curriculum</th><th>Track</th><th>Year</th><th>Status</th><th class="text-end">Actions</th></tr>
           </thead>
           <tbody id="students-tbody"></tbody>
         </table>
@@ -55,10 +55,17 @@ async function initAdminStudents(content) {
                 <div class="form-text" id="studentIdHelp">Also used as the student's initial login password (min. 6 characters).</div>
                 <div class="invalid-feedback">Student ID is required and must be at least 6 characters.</div>
               </div>
-              <div class="mb-3">
-                <label class="form-label">Full Name</label>
-                <input type="text" class="form-control" id="fullName" required />
-                <div class="invalid-feedback">Full name is required.</div>
+              <div class="row">
+                <div class="col-6 mb-3">
+                  <label class="form-label">First Name</label>
+                  <input type="text" class="form-control" id="firstName" required />
+                  <div class="invalid-feedback">First name is required.</div>
+                </div>
+                <div class="col-6 mb-3">
+                  <label class="form-label">Last Name</label>
+                  <input type="text" class="form-control" id="lastName" required />
+                  <div class="invalid-feedback">Last name is required.</div>
+                </div>
               </div>
               <div class="mb-3">
                 <label class="form-label">Email</label>
@@ -72,6 +79,13 @@ async function initAdminStudents(content) {
                   <div class="invalid-feedback">Source college is required.</div>
                 </div>
                 <div class="col-6 mb-3">
+                  <label class="form-label">Course</label>
+                  <input type="text" class="form-control" id="course" placeholder="e.g. BSIT" required />
+                  <div class="invalid-feedback">Course is required.</div>
+                </div>
+              </div>
+              <div class="row">
+                <div class="col-6 mb-3">
                   <label class="form-label">Curriculum</label>
                   <select class="form-select" id="curriculum" required>
                     <option value="">Select</option>
@@ -80,8 +94,6 @@ async function initAdminStudents(content) {
                   </select>
                   <div class="invalid-feedback">Select a curriculum.</div>
                 </div>
-              </div>
-              <div class="row">
                 <div class="col-6 mb-3">
                   <label class="form-label">Track</label>
                   <select class="form-select" id="track" required>
@@ -92,14 +104,14 @@ async function initAdminStudents(content) {
                   </select>
                   <div class="invalid-feedback">Select a track.</div>
                 </div>
-                <div class="col-6 mb-3">
-                  <label class="form-label">Year Level</label>
-                  <select class="form-select" id="yearLevel" required>
-                    <option value="">Select</option>
-                    <option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option>
-                  </select>
-                  <div class="invalid-feedback">Select a year level.</div>
-                </div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Year Level</label>
+                <select class="form-select" id="yearLevel" required>
+                  <option value="">Select</option>
+                  <option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option>
+                </select>
+                <div class="invalid-feedback">Select a year level.</div>
               </div>
               <div class="mb-3" id="statusFieldWrap" style="display:none">
                 <label class="form-label">Status</label>
@@ -170,6 +182,7 @@ function renderStudentsTable() {
       <td>${escapeHtml(s.fullName)}</td>
       <td>${escapeHtml(s.email)}</td>
       <td>${escapeHtml(s.college)}</td>
+      <td>${escapeHtml(s.course)}</td>
       <td>${s.curriculum ? escapeHtml(s.curriculum) + " Curriculum" : ""}</td>
       <td>${escapeHtml(s.track)}</td>
       <td>${escapeHtml(s.yearLevel)}</td>
@@ -182,7 +195,7 @@ function renderStudentsTable() {
     </tr>`
         )
         .join("")
-    : `<tr><td colspan="9" class="text-center text-muted py-4">No students found.</td></tr>`;
+    : `<tr><td colspan="10" class="text-center text-muted py-4">No students found.</td></tr>`;
 
   document.getElementById("students-count").textContent = `${total} student(s)`;
   renderPagination(document.getElementById("students-pagination"), studentsPage, totalPages, (p) => {
@@ -207,9 +220,12 @@ function openStudentModal(id) {
     document.getElementById("studentId").value = s.id;
     document.getElementById("studentId").disabled = true; // ID is the doc key, don't allow changing
     document.getElementById("studentIdHelp").style.display = "none"; // editing never touches the login password
-    document.getElementById("fullName").value = s.fullName || "";
+    const [fallbackFirst, ...fallbackRest] = (s.fullName || "").split(" ");
+    document.getElementById("firstName").value = s.firstName || fallbackFirst || "";
+    document.getElementById("lastName").value = s.lastName || fallbackRest.join(" ") || "";
     document.getElementById("email").value = s.email || "";
     document.getElementById("college").value = s.college || "";
+    document.getElementById("course").value = s.course || "";
     document.getElementById("curriculum").value = s.curriculum || "";
     document.getElementById("track").value = s.track || "";
     document.getElementById("yearLevel").value = s.yearLevel || "";
@@ -243,10 +259,15 @@ async function saveStudent(e) {
   btn.disabled = true;
 
   try {
+    const firstName = document.getElementById("firstName").value.trim();
+    const lastName = document.getElementById("lastName").value.trim();
     const data = {
-      fullName: document.getElementById("fullName").value.trim(),
+      firstName,
+      lastName,
+      fullName: `${firstName} ${lastName}`.trim(),
       email: document.getElementById("email").value.trim(),
       college: document.getElementById("college").value.trim(),
+      course: document.getElementById("course").value.trim(),
       curriculum: document.getElementById("curriculum").value,
       track: document.getElementById("track").value,
       yearLevel: document.getElementById("yearLevel").value,
@@ -296,9 +317,11 @@ function viewStudent(id) {
   document.getElementById("viewStudentBody").innerHTML = `
     <dl class="row mb-0">
       <dt class="col-5">Student ID</dt><dd class="col-7">${escapeHtml(s.id)}</dd>
-      <dt class="col-5">Full Name</dt><dd class="col-7">${escapeHtml(s.fullName)}</dd>
+      <dt class="col-5">First Name</dt><dd class="col-7">${escapeHtml(s.firstName)}</dd>
+      <dt class="col-5">Last Name</dt><dd class="col-7">${escapeHtml(s.lastName)}</dd>
       <dt class="col-5">Email</dt><dd class="col-7">${escapeHtml(s.email)}</dd>
       <dt class="col-5">Source College</dt><dd class="col-7">${escapeHtml(s.college)}</dd>
+      <dt class="col-5">Course</dt><dd class="col-7">${escapeHtml(s.course)}</dd>
       <dt class="col-5">Curriculum</dt><dd class="col-7">${escapeHtml(s.curriculum)}</dd>
       <dt class="col-5">Track</dt><dd class="col-7">${escapeHtml(s.track)}</dd>
       <dt class="col-5">Year Level</dt><dd class="col-7">${escapeHtml(s.yearLevel)}</dd>
