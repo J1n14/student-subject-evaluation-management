@@ -28,7 +28,7 @@ async function initAdminStudents(content) {
       <div class="table-responsive">
         <table class="table table-hover align-middle">
           <thead>
-            <tr><th>Student ID</th><th>Full Name</th><th>Email</th><th>Source College</th><th>Course</th><th>Curriculum</th><th>Track</th><th>Year</th><th>Status</th><th class="text-end">Actions</th></tr>
+            <tr><th>Student ID</th><th>Full Name</th><th>Email</th><th>Source College</th><th>Course</th><th>Curriculum</th><th>Track</th><th>Year</th><th>Type</th><th>Status</th><th class="text-end">Actions</th></tr>
           </thead>
           <tbody id="students-tbody"></tbody>
         </table>
@@ -106,13 +106,25 @@ async function initAdminStudents(content) {
                   <div class="invalid-feedback">Select a track.</div>
                 </div>
               </div>
-              <div class="mb-3">
-                <label class="form-label">Year Level</label>
-                <select class="form-select" id="yearLevel" required>
-                  <option value="">Select</option>
-                  <option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option>
-                </select>
-                <div class="invalid-feedback">Select a year level.</div>
+              <div class="row">
+                <div class="col-6 mb-3">
+                  <label class="form-label">Year Level</label>
+                  <select class="form-select" id="yearLevel" required>
+                    <option value="">Select</option>
+                    <option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option>
+                  </select>
+                  <div class="invalid-feedback">Select a year level.</div>
+                </div>
+                <div class="col-6 mb-3">
+                  <label class="form-label">Student Type</label>
+                  <select class="form-select" id="studentType" required>
+                    <option value="">Select</option>
+                    <option>Regular</option>
+                    <option>Irregular</option>
+                  </select>
+                  <div class="form-text">Regular auto-credits all lower-year subjects.</div>
+                  <div class="invalid-feedback">Select a student type.</div>
+                </div>
               </div>
               <div class="mb-3" id="statusFieldWrap" style="display:none">
                 <label class="form-label">Status</label>
@@ -188,6 +200,7 @@ function renderStudentsTable() {
       <td>${escapeOrDash(s.curriculum)}</td>
       <td>${escapeOrDash(s.track)}</td>
       <td>${escapeHtml(s.yearLevel)}</td>
+      <td>${escapeOrDash(s.studentType)}</td>
       <td>${statusBadge(s.status || "Pending")}</td>
       <td class="text-end">
         <button class="btn btn-sm btn-outline-secondary" onclick="viewStudent('${s.id}')"><i class="bi bi-eye"></i></button>
@@ -197,7 +210,7 @@ function renderStudentsTable() {
     </tr>`
         )
         .join("")
-    : `<tr><td colspan="10" class="text-center text-muted py-4">No students found.</td></tr>`;
+    : `<tr><td colspan="11" class="text-center text-muted py-4">No students found.</td></tr>`;
 
   document.getElementById("students-count").textContent = `${total} student(s)`;
   renderPagination(document.getElementById("students-pagination"), studentsPage, totalPages, (p) => {
@@ -231,6 +244,7 @@ function openStudentModal(id) {
     document.getElementById("curriculum").value = s.curriculum || "";
     document.getElementById("track").value = s.track || "";
     document.getElementById("yearLevel").value = s.yearLevel || "";
+    document.getElementById("studentType").value = s.studentType || "";
     document.getElementById("status").value = s.status || "Pending";
     document.getElementById("statusFieldWrap").style.display = "block";
   } else {
@@ -248,6 +262,45 @@ async function createStudentAuthAccount(email, password) {
   } finally {
     await secondaryApp.delete();
   }
+}
+
+// For a Regular student, every subject in their curriculum + track from a
+// year level BELOW their current year is treated as already taken, so it is
+// written as a credited record. No grades are tracked here — a credit simply
+// means "subject already taken". Idempotent: deterministic IDs + merge, so
+// re-saving never duplicates and never disturbs credits for the current or
+// upper years. Returns how many subjects were credited.
+async function autoCreditLowerYears(studentId, student) {
+  const currentYearIdx = YEAR_ORDER.indexOf(student.yearLevel);
+  if (currentYearIdx <= 0) return 0; // 1st Year (or unknown) has no lower years
+
+  const subjectsSnap = await db.collection("subjects").get();
+  const allSubjects = subjectsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const lowerYear = getRequiredSubjects(student, allSubjects).filter((s) => {
+    const idx = YEAR_ORDER.indexOf(s.yearLevel);
+    return idx > -1 && idx < currentYearIdx;
+  });
+  if (lowerYear.length === 0) return 0;
+
+  const batch = db.batch();
+  lowerYear.forEach((sub) => {
+    const ref = db.collection("creditedSubjects").doc(`${studentId}_${sub.id}`);
+    batch.set(
+      ref,
+      {
+        studentId,
+        subjectId: sub.id,
+        creditedFrom: "Regular - completed in prior year",
+        grade: "-",
+        remarks: "Auto-credited (regular)",
+        creditedBy: auth.currentUser.email,
+        creditedAt: serverTimestamp()
+      },
+      { merge: true }
+    );
+  });
+  await batch.commit();
+  return lowerYear.length;
 }
 
 async function saveStudent(e) {
@@ -273,6 +326,7 @@ async function saveStudent(e) {
       curriculum: document.getElementById("curriculum").value,
       track: document.getElementById("track").value,
       yearLevel: document.getElementById("yearLevel").value,
+      studentType: document.getElementById("studentType").value,
       updatedAt: serverTimestamp()
     };
 
@@ -280,7 +334,13 @@ async function saveStudent(e) {
       data.status = document.getElementById("status").value;
       await db.collection("students").doc(editingId).update(data);
       await logActivity(`Updated student ${editingId}`);
-      showToast("Student updated.");
+      if (data.studentType === "Regular") {
+        const n = await autoCreditLowerYears(editingId, data);
+        await recomputeCreditStatus(editingId);
+        showToast(n ? `Student updated. Auto-credited ${n} lower-year subject(s).` : "Student updated.");
+      } else {
+        showToast("Student updated.");
+      }
     } else {
       const existing = await db.collection("students").doc(studentId).get();
       if (existing.exists) throw new Error("A student with this Student ID already exists.");
@@ -302,7 +362,15 @@ async function saveStudent(e) {
       });
 
       await logActivity(`Added student ${studentId}`);
-      showToast("Student added. They can log in with their email and Student ID as the password.");
+      if (data.studentType === "Regular") {
+        const n = await autoCreditLowerYears(studentId, data);
+        await recomputeCreditStatus(studentId);
+        showToast(
+          `Student added${n ? ` and auto-credited ${n} lower-year subject(s)` : ""}. They log in with their email and Student ID as the password.`
+        );
+      } else {
+        showToast("Student added. They can log in with their email and Student ID as the password.");
+      }
     }
 
     bootstrap.Modal.getInstance(document.getElementById("studentModal")).hide();
@@ -327,6 +395,7 @@ function viewStudent(id) {
       <dt class="col-5">Curriculum</dt><dd class="col-7">${escapeOrDash(s.curriculum)}</dd>
       <dt class="col-5">Track</dt><dd class="col-7">${escapeOrDash(s.track)}</dd>
       <dt class="col-5">Year Level</dt><dd class="col-7">${escapeHtml(s.yearLevel)}</dd>
+      <dt class="col-5">Student Type</dt><dd class="col-7">${escapeOrDash(s.studentType)}</dd>
       <dt class="col-5">Status</dt><dd class="col-7">${statusBadge(s.status || "Pending")}</dd>
       <dt class="col-5">Created At</dt><dd class="col-7">${formatDateTime(s.createdAt)}</dd>
       <dt class="col-5">Updated At</dt><dd class="col-7">${formatDateTime(s.updatedAt)}</dd>
