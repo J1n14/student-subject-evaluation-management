@@ -129,7 +129,14 @@ async function selectStudentForAssignment(studentId) {
         <h5 class="mb-0">${escapeHtml(student.fullName)}</h5>
         <div class="text-muted small">${escapeHtml(student.id)} &middot; ${escapeOrDash(student.curriculum)} &middot; ${escapeHtml(student.track)} &middot; ${escapeHtml(student.yearLevel)}</div>
       </div>
-      ${statusBadge(student.status || "Pending")}
+      <div class="text-end">
+        ${statusBadge(student.status || "Pending")}
+        <div class="mt-2">
+          <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#transferCreditModal" onclick="openTransferCreditModal()">
+            <i class="bi bi-award me-1"></i>Add Transfer Credit
+          </button>
+        </div>
+      </div>
     </div>
 
     ${emptyNotice}
@@ -165,9 +172,6 @@ async function selectStudentForAssignment(studentId) {
       <div class="d-flex gap-2 flex-wrap">
         <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Save Assignment</button>
         <button type="button" class="btn btn-outline-success" id="assign-all-btn"><i class="bi bi-check2-all me-1"></i>Assign all still-to-take</button>
-        <button type="button" class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#transferCreditModal" onclick="openTransferCreditModal()">
-          <i class="bi bi-award me-1"></i>Add Transfer Credit
-        </button>
       </div>
     </form>
 
