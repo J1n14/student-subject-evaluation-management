@@ -98,12 +98,12 @@ async function generateReport() {
   } else if (type === "credits") {
     body = `
       <table class="table table-bordered table-sm">
-        <thead><tr><th>Student ID</th><th>Student Name</th><th>Subject</th><th>Credited From</th><th>Grade</th><th>Credited By</th><th>Date</th></tr></thead>
+        <thead><tr><th>Student ID</th><th>Student Name</th><th>Subject</th><th>Credited From</th><th>Credited By</th><th>Date</th></tr></thead>
         <tbody>${creditedSubjects
           .map((c) => {
             const s = students.find((st) => st.id === c.studentId);
             const sub = subjects[c.subjectId];
-            return `<tr><td>${escapeHtml(c.studentId)}</td><td>${escapeHtml(s ? s.fullName : "?")}</td><td>${escapeHtml(sub ? sub.subjectCode : "?")}</td><td>${escapeHtml(c.creditedFrom)}</td><td>${escapeHtml(c.grade)}</td><td>${escapeHtml(c.creditedBy)}</td><td>${formatDate(c.creditedAt)}</td></tr>`;
+            return `<tr><td>${escapeHtml(c.studentId)}</td><td>${escapeHtml(s ? s.fullName : "?")}</td><td>${escapeHtml(sub ? sub.subjectCode : "?")}</td><td>${escapeHtml(c.creditedFrom)}</td><td>${escapeHtml(c.creditedBy)}</td><td>${formatDate(c.creditedAt)}</td></tr>`;
           })
           .join("")}</tbody>
       </table>`;

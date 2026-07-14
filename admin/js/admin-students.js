@@ -291,7 +291,6 @@ async function autoCreditLowerYears(studentId, student) {
         studentId,
         subjectId: sub.id,
         creditedFrom: "Regular - completed in prior year",
-        grade: "-",
         remarks: "Auto-credited (regular)",
         creditedBy: auth.currentUser.email,
         creditedAt: serverTimestamp()

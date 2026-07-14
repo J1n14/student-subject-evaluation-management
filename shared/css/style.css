@@ -234,6 +234,31 @@ body {
 .subj-meta .units { font-size: 0.75rem; color: #9a9ab0; }
 .subj-meta .open-pill { background: #eef0f6; color: #6b6b80; }
 
+/* ---------- Polished data tables (all admin + student pages) ---------- */
+.content-area .table { margin-bottom: 0; vertical-align: middle; }
+.content-area .table > thead > tr > th {
+  background: var(--bg-soft);
+  color: var(--brand-dark);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 700;
+  border-bottom: 2px solid var(--surface-alt);
+  padding: 0.65rem 0.75rem;
+}
+.content-area .table > tbody > tr > td { padding: 0.6rem 0.75rem; }
+.content-area .table > tbody > tr { transition: background 0.12s ease; }
+.content-area .table:not(.table-bordered) > tbody > tr > td { border-color: rgba(39, 52, 105, 0.07); }
+.content-area .table:not(.table-bordered) > tbody > tr:last-child > td { border-bottom: 0; }
+.content-area .table > tbody > tr:nth-of-type(even) > * { background: #fbfbfe; }
+.content-area .table.table-hover > tbody > tr:hover > * { background: var(--surface-alt); }
+.content-area .table-responsive { border-radius: 10px; }
+.content-area .table .btn-sm { --bs-btn-padding-y: 0.15rem; --bs-btn-padding-x: 0.4rem; }
+.content-area .table .badge { font-weight: 600; }
+
+/* ---------- Report header ---------- */
+.report-header h4 { color: var(--brand); font-weight: 700; }
+
 /* ---------- Print (Reports) ---------- */
 @media print {
   .no-print { display: none !important; }
