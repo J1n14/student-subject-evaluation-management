@@ -41,7 +41,7 @@ async function initAdminStudents(content) {
 
     <!-- Add/Edit Modal -->
     <div class="modal fade" id="studentModal" tabindex="-1">
-      <div class="modal-dialog">
+      <div class="modal-dialog modal-lg">
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title" id="studentModalTitle">Add Student</h5>
@@ -54,10 +54,12 @@ async function initAdminStudents(content) {
                 <i class="bi bi-info-circle me-1"></i>The student's initial login password will be their
                 <strong>Last Name</strong> (padded if shorter than 6 characters).
               </div>
-              <div class="mb-3 p-3 border rounded" style="background:var(--bg-soft)">
-                <label class="form-label fw-semibold">
-                  <span class="badge bg-primary rounded-pill me-1">1</span>Student Type
+
+              <div class="mb-4 p-3 border rounded" style="background:var(--bg-soft)">
+                <label class="form-label fw-semibold mb-1">
+                  <span class="badge bg-primary rounded-pill me-1">1</span>Student Type &mdash; select this first
                 </label>
+                <div class="text-muted small mb-2">This determines which subjects will need to be assigned later on the Subject Assignment page.</div>
                 <select class="form-select" id="studentType" required>
                   <option value="">Select the student type first...</option>
                   <option>Regular</option>
@@ -68,38 +70,47 @@ async function initAdminStudents(content) {
                 </select>
                 <div class="form-text" id="studentTypeHelp">Choose a type to see what it means for this student's subjects.</div>
                 <div class="invalid-feedback">Select a student type.</div>
+                <div class="alert alert-light border small mt-2 mb-0" id="studentTypeAssignNote" style="display:none">
+                  <i class="bi bi-signpost-split me-1"></i><span id="studentTypeAssignNoteText"></span>
+                </div>
               </div>
+
+              <h6 class="text-uppercase text-muted small fw-bold mb-2" style="letter-spacing:.05em">
+                <i class="bi bi-person me-1"></i>Personal Information
+              </h6>
               <div class="row">
-                <div class="col-6 mb-3">
+                <div class="col-md-6 mb-3">
                   <label class="form-label">First Name</label>
                   <input type="text" class="form-control" id="firstName" required />
                   <div class="invalid-feedback">First name is required.</div>
                 </div>
-                <div class="col-6 mb-3">
+                <div class="col-md-6 mb-3">
                   <label class="form-label">Last Name</label>
                   <input type="text" class="form-control" id="lastName" required />
                   <div class="invalid-feedback">Last name is required.</div>
                 </div>
+                <div class="col-12 mb-3">
+                  <label class="form-label">Email</label>
+                  <input type="email" class="form-control" id="email" required />
+                  <div class="invalid-feedback">Valid email is required.</div>
+                </div>
               </div>
-              <div class="mb-3">
-                <label class="form-label">Email</label>
-                <input type="email" class="form-control" id="email" required />
-                <div class="invalid-feedback">Valid email is required.</div>
-              </div>
+
+              <h6 class="text-uppercase text-muted small fw-bold mb-2 mt-1" style="letter-spacing:.05em">
+                <i class="bi bi-mortarboard me-1"></i>Academic Background
+              </h6>
               <div class="row">
-                <div class="col-6 mb-3">
+                <div class="col-md-6 mb-3">
                   <label class="form-label">Source College</label>
                   <input type="text" class="form-control" id="college" placeholder="e.g. College of Computer Studies" required />
                   <div class="invalid-feedback">Source college is required.</div>
                 </div>
-                <div class="col-6 mb-3">
+                <div class="col-md-6 mb-3">
                   <label class="form-label">Course</label>
                   <input type="text" class="form-control" id="course" placeholder="e.g. BSIT" required />
                   <div class="invalid-feedback">Course is required.</div>
                 </div>
-              </div>
-              <div class="row">
-                <div class="col-6 mb-3">
+                <div class="col-md-6 mb-3">
                   <label class="form-label">Curriculum</label>
                   <select class="form-select" id="curriculum" required>
                     <option value="">Select</option>
@@ -108,7 +119,7 @@ async function initAdminStudents(content) {
                   </select>
                   <div class="invalid-feedback">Select a curriculum.</div>
                 </div>
-                <div class="col-6 mb-3">
+                <div class="col-md-6 mb-3">
                   <label class="form-label">Track <span class="text-muted fw-normal">(optional)</span></label>
                   <select class="form-select" id="track">
                     <option value="">None / not applicable</option>
@@ -118,8 +129,12 @@ async function initAdminStudents(content) {
                   </select>
                 </div>
               </div>
+
+              <h6 class="text-uppercase text-muted small fw-bold mb-2 mt-1" style="letter-spacing:.05em">
+                <i class="bi bi-calendar-event me-1"></i>Enrollment Details
+              </h6>
               <div class="row">
-                <div class="col-6 mb-3">
+                <div class="col-md-6 mb-3">
                   <label class="form-label">Year Level</label>
                   <select class="form-select" id="yearLevel" required>
                     <option value="">Select</option>
@@ -127,35 +142,35 @@ async function initAdminStudents(content) {
                   </select>
                   <div class="invalid-feedback">Select a year level.</div>
                 </div>
-                <div class="col-6 mb-3">
+                <div class="col-md-6 mb-3">
                   <label class="form-label">Academic Year</label>
                   <input type="text" class="form-control" id="academicYear" placeholder="e.g. 2025-2026" required />
                   <div class="invalid-feedback">Academic year is required.</div>
                 </div>
-              </div>
-              <div class="row">
-                <div class="col-6 mb-3" id="lastSchoolYearWrap" style="display:none">
+                <div class="col-md-6 mb-3" id="lastSchoolYearWrap" style="display:none">
                   <label class="form-label">Last School Year Attended</label>
                   <input type="text" class="form-control" id="lastSchoolYearAttended" placeholder="e.g. 2023-2024" />
                   <div class="invalid-feedback">Required for this student type.</div>
                 </div>
-                <div class="col-6 mb-3" id="previousSchoolWrap" style="display:none">
+                <div class="col-md-6 mb-3" id="previousSchoolWrap" style="display:none">
                   <label class="form-label">Previous School</label>
                   <input type="text" class="form-control" id="previousSchool" placeholder="School the student transferred from" />
                   <div class="invalid-feedback">Required for transferees.</div>
                 </div>
               </div>
-              <div class="alert alert-light border small" id="studentTypeAssignNote" style="display:none">
-                <i class="bi bi-signpost-split me-1"></i><span id="studentTypeAssignNoteText"></span>
-              </div>
-              <div class="mb-3" id="statusFieldWrap" style="display:none">
-                <label class="form-label">Status</label>
-                <select class="form-select" id="status">
-                  <option value="Pending">Pending</option>
-                  <option value="In Progress">In Progress</option>
-                  <option value="Graduated">Graduated</option>
-                </select>
-                <div class="form-text">Status is normally set automatically from Credit Evaluation progress.</div>
+
+              <div id="statusFieldWrap" style="display:none">
+                <h6 class="text-uppercase text-muted small fw-bold mb-2 mt-1" style="letter-spacing:.05em">
+                  <i class="bi bi-flag me-1"></i>Status
+                </h6>
+                <div class="mb-1">
+                  <select class="form-select" id="status">
+                    <option value="Pending">Pending</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Graduated">Graduated</option>
+                  </select>
+                  <div class="form-text">Status is normally set automatically from Credit Evaluation progress.</div>
+                </div>
               </div>
             </div>
             <div class="modal-footer">

@@ -84,11 +84,6 @@ function _renderEvalShell() {
   st.container.innerHTML = `
     ${_headerHtml()}
 
-    <div class="alert alert-light border small d-flex align-items-start gap-2 mb-3">
-      <i class="bi bi-info-circle mt-1"></i>
-      <div><strong>What this page shows:</strong> which subjects ${who} curriculum requires and whether each has already been taken ("credited"). This is not a grade &mdash; it only tracks completion.</div>
-    </div>
-
     <div class="row row-cols-3 g-2 mb-3">
       <div class="col">
         <div class="border rounded p-2 text-center h-100">

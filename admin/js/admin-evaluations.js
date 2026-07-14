@@ -5,86 +5,125 @@ let creditTabState = null; // { student, requiredSubjects, requiredSubjectsById,
 
 async function initAdminEvaluations(content) {
   content.innerHTML = `
-    <div class="row g-3">
-      <div class="col-lg-4">
-        <div class="section-card">
-          <h6 class="mb-3"><i class="bi bi-person-check me-1"></i>Select Student</h6>
-          <input type="text" class="form-control mb-2" placeholder="Search by name or email..." id="eval-student-search" />
-          <div class="list-group" id="eval-student-list" style="max-height:520px; overflow-y:auto;"></div>
-        </div>
+    <div class="section-card mb-3">
+      <label class="form-label fw-semibold mb-2"><span class="badge bg-primary rounded-pill me-1">1</span>Select Student</label>
+      <div class="position-relative">
+        <input type="text" class="form-control" id="eval-student-search" placeholder="Search by name or email..." autocomplete="off" />
+        <div class="list-group position-absolute w-100 mt-1" id="eval-student-search-results" style="display:none;"></div>
       </div>
-      <div class="col-lg-8">
-        <div class="section-card">
-          <div id="credit-evaluation-panel">
-            <div class="text-muted text-center py-5">
-              <i class="bi bi-arrow-left-circle" style="font-size:2rem;"></i>
-              <p class="mt-2">Select a student to view their credit evaluation.</p>
-            </div>
-          </div>
+      <div id="eval-selected-student-chip" class="mt-2"></div>
+    </div>
 
-          <div class="modal fade" id="creditModal" tabindex="-1">
-            <div class="modal-dialog">
-              <div class="modal-content">
-                <div class="modal-header">
-                  <h5 class="modal-title" id="creditModalTitle">Add Credited Subject</h5>
-                  <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <form id="credit-form" class="needs-validation" novalidate>
-                  <div class="modal-body">
-                    <input type="hidden" id="creditDocId" />
-                    <div class="mb-3">
-                      <label class="form-label">Subject</label>
-                      <select class="form-select" id="creditSubjectId" required>
-                        <option value="">Select subject</option>
-                      </select>
-                      <div class="invalid-feedback">Select a subject.</div>
-                    </div>
-                    <div class="mb-3">
-                      <label class="form-label">Credited From (old school course)</label>
-                      <input type="text" class="form-control" id="creditedFrom" placeholder="e.g. GE 1102 - Mathematics in the Modern World" required />
-                      <div class="invalid-feedback">Required.</div>
-                    </div>
-                    <div class="mb-3">
-                      <label class="form-label">Remarks</label>
-                      <input type="text" class="form-control" id="creditRemarks" placeholder="Optional" />
-                    </div>
-                  </div>
-                  <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary" id="credit-save-btn">Save</button>
-                  </div>
-                </form>
+    <div class="section-card" id="eval-section" style="display:none">
+      <label class="form-label fw-semibold mb-2"><span class="badge bg-primary rounded-pill me-1">2</span>Credit Evaluation</label>
+      <div id="credit-evaluation-panel"></div>
+    </div>
+
+    <div class="modal fade" id="creditModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="creditModalTitle">Add Credited Subject</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <form id="credit-form" class="needs-validation" novalidate>
+            <div class="modal-body">
+              <input type="hidden" id="creditDocId" />
+              <div class="mb-3">
+                <label class="form-label">Subject</label>
+                <select class="form-select" id="creditSubjectId" required>
+                  <option value="">Select subject</option>
+                </select>
+                <div class="invalid-feedback">Select a subject.</div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Credited From (old school course)</label>
+                <input type="text" class="form-control" id="creditedFrom" placeholder="e.g. GE 1102 - Mathematics in the Modern World" required />
+                <div class="invalid-feedback">Required.</div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Remarks</label>
+                <input type="text" class="form-control" id="creditRemarks" placeholder="Optional" />
               </div>
             </div>
-          </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button type="submit" class="btn btn-primary" id="credit-save-btn">Save</button>
+            </div>
+          </form>
         </div>
       </div>
     </div>`;
 
-  document.getElementById("eval-student-search").addEventListener("input", debounce(renderEvalStudentList, 200));
+  document.getElementById("eval-student-search").addEventListener("input", debounce(renderEvalStudentSearchResults, 150));
+  document.getElementById("eval-student-search").addEventListener("focus", renderEvalStudentSearchResults);
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#eval-student-search") && !e.target.closest("#eval-student-search-results")) {
+      const results = document.getElementById("eval-student-search-results");
+      if (results) results.style.display = "none";
+    }
+  });
   document.getElementById("credit-form").addEventListener("submit", saveCreditedSubject);
 
   const snap = await db.collection("students").orderBy("fullName").get();
   evalStudents = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  renderEvalStudentList();
 }
 
-function renderEvalStudentList() {
-  const search = document.getElementById("eval-student-search").value.toLowerCase();
-  const filtered = evalStudents.filter(
-    (s) => !search || s.fullName.toLowerCase().includes(search) || (s.email || "").toLowerCase().includes(search)
-  );
-  document.getElementById("eval-student-list").innerHTML = filtered
-    .map(
-      (s) => `<button type="button" class="list-group-item list-group-item-action" onclick="selectStudentForCreditEvaluation('${s.id}')">
+function renderEvalStudentSearchResults() {
+  const input = document.getElementById("eval-student-search");
+  const search = input.value.toLowerCase().trim();
+  const results = document.getElementById("eval-student-search-results");
+
+  const matches = evalStudents
+    .filter((s) => !search || s.fullName.toLowerCase().includes(search) || (s.email || "").toLowerCase().includes(search))
+    .slice(0, 8);
+
+  results.innerHTML = matches.length
+    ? matches
+        .map(
+          (s) => `<button type="button" class="list-group-item list-group-item-action" onclick="pickStudentForEvaluation('${s.id}')">
         <div class="d-flex justify-content-between">
           <span>${escapeHtml(s.fullName)}</span>
           ${statusBadge(s.status || "Pending")}
         </div>
         <div class="small text-muted">${escapeHtml(s.email)} &middot; ${escapeOrDash(s.track)}</div>
       </button>`
-    )
-    .join("") || `<div class="text-muted small p-2">No students found.</div>`;
+        )
+        .join("")
+    : `<div class="list-group-item text-muted small">No students found.</div>`;
+  results.style.display = "block";
+}
+
+function pickStudentForEvaluation(studentId) {
+  document.getElementById("eval-student-search-results").style.display = "none";
+  document.getElementById("eval-student-search").value = "";
+
+  const s = evalStudents.find((x) => x.id === studentId);
+  document.getElementById("eval-selected-student-chip").innerHTML = `
+    <div class="selected-student-chip">
+      <div>
+        <strong>${escapeHtml(s.fullName)}</strong>
+        <span class="text-muted small ms-2">${escapeHtml(s.email)}</span>
+        <span class="ms-2">${statusBadge(s.status || "Pending")}</span>
+      </div>
+      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearSelectedEvaluationStudent()">
+        <i class="bi bi-arrow-repeat me-1"></i>Change student
+      </button>
+    </div>`;
+
+  document.getElementById("eval-section").style.display = "block";
+  selectStudentForCreditEvaluation(studentId);
+}
+
+function clearSelectedEvaluationStudent() {
+  currentSelectedStudentId = null;
+  creditTabState = null;
+  document.getElementById("eval-selected-student-chip").innerHTML = "";
+  document.getElementById("eval-section").style.display = "none";
+  document.getElementById("credit-evaluation-panel").innerHTML = "";
+  const input = document.getElementById("eval-student-search");
+  input.value = "";
+  input.focus();
 }
 
 // ==================== Credit Evaluation ====================
@@ -188,7 +227,6 @@ async function saveCreditedSubject(e) {
 
     const idx = evalStudents.findIndex((s) => s.id === student.id);
     if (idx > -1) evalStudents[idx].status = newStatus;
-    renderEvalStudentList();
 
     bootstrap.Modal.getInstance(document.getElementById("creditModal")).hide();
     await selectStudentForCreditEvaluation(student.id);
@@ -247,7 +285,6 @@ async function markAllCredited() {
 
     const idx = evalStudents.findIndex((s) => s.id === student.id);
     if (idx > -1) evalStudents[idx].status = newStatus;
-    renderEvalStudentList();
 
     await selectStudentForCreditEvaluation(student.id);
   } catch (err) {
@@ -265,7 +302,6 @@ async function deleteCreditedSubject(creditId, studentId) {
 
     const idx = evalStudents.findIndex((s) => s.id === studentId);
     if (idx > -1) evalStudents[idx].status = newStatus;
-    renderEvalStudentList();
 
     await selectStudentForCreditEvaluation(studentId);
   } catch (err) {

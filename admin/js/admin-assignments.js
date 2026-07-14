@@ -295,6 +295,18 @@ async function selectStudentForAssignment(studentId) {
   document.getElementById("subject-picker-container").addEventListener("change", (e) => {
     if (e.target.matches('input[type="checkbox"]')) updateSelectedUnitsTotal();
   });
+  // Clicking anywhere on a row (not just the checkbox) toggles it, for a
+  // bigger, easier-to-hit target - same convenience the old box picker had.
+  document.getElementById("subject-picker-container").addEventListener("click", (e) => {
+    if (e.target.matches('input[type="checkbox"]')) return;
+    const row = e.target.closest("tr[data-subject-row]");
+    if (!row) return;
+    const cb = row.querySelector('input[type="checkbox"]');
+    if (cb && !cb.disabled) {
+      cb.checked = !cb.checked;
+      updateSelectedUnitsTotal();
+    }
+  });
   document.getElementById("unit-policy-edit-toggle").addEventListener("click", () => toggleUnitPolicyEditor(true));
   document.getElementById("unit-policy-cancel-btn").addEventListener("click", () => toggleUnitPolicyEditor(false));
   document.getElementById("unit-policy-save-btn").addEventListener("click", saveUnitPolicyInline);
@@ -303,7 +315,7 @@ async function selectStudentForAssignment(studentId) {
   updateSelectedUnitsTotal();
 }
 
-// ---------- Box grid rendering (grouped by Year > Semester) ----------
+// ---------- Picker table rendering (grouped by Year > Semester) ----------
 
 function renderSubjectBoxGrid(displaySubjects, assignedIds, requiredIds) {
   const years = [...new Set(displaySubjects.map((s) => s.yearLevel))].sort(
@@ -319,7 +331,14 @@ function renderSubjectBoxGrid(displaySubjects, assignedIds, requiredIds) {
           return `
         <div class="sem-group" data-sem-group>
           <div class="sem-head">${escapeHtml(sem)}<span class="sem-count">${rows.length} subject(s)</span></div>
-          <div class="subj-box-grid">${rows.map((sub) => renderSubjectBox(sub, assignedIds, requiredIds)).join("")}</div>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered subj-picker-table">
+              <thead>
+                <tr><th></th><th>Code</th><th>Subject Name</th><th>Units</th><th>Prerequisite</th><th>Status</th></tr>
+              </thead>
+              <tbody>${rows.map((sub) => renderSubjectPickerRow(sub, assignedIds, requiredIds)).join("")}</tbody>
+            </table>
+          </div>
         </div>`;
         })
         .join("");
@@ -332,17 +351,17 @@ function renderSubjectBoxGrid(displaySubjects, assignedIds, requiredIds) {
     .join("");
 }
 
-function renderSubjectBox(sub, assignedIds, requiredIds) {
+function renderSubjectPickerRow(sub, assignedIds, requiredIds) {
   const isCredited = currentCreditedMap.has(sub.id);
   const isAssigned = assignedIds.has(sub.id);
   const isOffPlan = !requiredIds.has(sub.id);
   const missingPrereq = isCredited ? "" : unmetPrerequisites(sub, currentCreditedMap);
 
-  let stateClass = "box-available";
-  if (isCredited) stateClass = "box-credited";
-  else if (isOffPlan) stateClass = "box-offplan";
-  else if (missingPrereq) stateClass = "box-prereq";
-  else if (isAssigned) stateClass = "box-assigned";
+  let stateClass = "row-available";
+  if (isCredited) stateClass = "row-credited";
+  else if (isOffPlan) stateClass = "row-offplan";
+  else if (missingPrereq) stateClass = "row-prereq";
+  else if (isAssigned) stateClass = "row-assigned";
 
   const badges = [];
   if (isCredited) badges.push(`<span class="badge bg-secondary">Credited</span>`);
@@ -350,25 +369,20 @@ function renderSubjectBox(sub, assignedIds, requiredIds) {
   if (isOffPlan) badges.push(`<span class="badge bg-secondary">Off-plan</span>`);
   if (missingPrereq)
     badges.push(`<span class="badge bg-warning text-dark" title="Prerequisite not yet credited">Needs ${escapeHtml(missingPrereq)} first</span>`);
+  if (!badges.length) badges.push(`<span class="badge bg-success">Available</span>`);
 
   // Credited subjects are already completed - the checkbox is disabled but
   // keeps its current assigned state (a disabled+checked box still submits as
   // :checked, so nothing is accidentally removed on save).
   return `
-    <label class="subj-box ${stateClass}" data-subject-row data-year="${escapeHtml(sub.yearLevel)}" data-semester="${escapeHtml(sub.semester)}" data-search="${escapeHtml((sub.subjectCode + " " + sub.subjectName).toLowerCase())}">
-      <div class="subj-box-top">
-        <input class="form-check-input mt-1 flex-shrink-0" type="checkbox" value="${sub.id}" ${isAssigned ? "checked" : ""} ${isCredited ? "disabled" : ""}>
-        <div class="min-w-0">
-          <span class="subj-box-code">${escapeHtml(sub.subjectCode)}</span>
-          <div class="subj-box-name">${escapeHtml(sub.subjectName)}</div>
-        </div>
-      </div>
-      <div class="subj-box-foot">
-        <span>${escapeHtml(sub.units)} unit(s)</span>
-        ${sub.prerequisite ? `<span title="Prerequisite: ${escapeHtml(sub.prerequisite)}"><i class="bi bi-link-45deg"></i> ${escapeHtml(sub.prerequisite)}</span>` : ""}
-      </div>
-      ${badges.length ? `<div class="subj-box-badges">${badges.join("")}</div>` : ""}
-    </label>`;
+    <tr class="${stateClass}" data-subject-row data-year="${escapeHtml(sub.yearLevel)}" data-semester="${escapeHtml(sub.semester)}" data-search="${escapeHtml((sub.subjectCode + " " + sub.subjectName).toLowerCase())}">
+      <td><input class="form-check-input" type="checkbox" value="${sub.id}" ${isAssigned ? "checked" : ""} ${isCredited ? "disabled" : ""}></td>
+      <td class="subj-code-cell">${escapeHtml(sub.subjectCode)}</td>
+      <td>${escapeHtml(sub.subjectName)}</td>
+      <td>${escapeHtml(sub.units)}</td>
+      <td>${escapeOrDash(sub.prerequisite)}</td>
+      <td>${badges.join(" ")}</td>
+    </tr>`;
 }
 
 // Ticks every "still to take" subject currently visible in the picker
@@ -461,15 +475,32 @@ function renderCurrentAssignmentsList(assignedIds) {
     .map((id) => assignSubjects.find((s) => s.id === id))
     .filter(Boolean)
     .sort(sortByPlan);
-  return `<div class="d-flex flex-wrap gap-2">${items
-    .map((sub) => {
-      const credited = currentCreditedMap.has(sub.id);
-      return `<span class="badge rounded-pill ${credited ? "bg-secondary" : "bg-primary"} d-inline-flex align-items-center gap-2 py-2 px-3">
-        <span>${escapeHtml(sub.subjectCode)} &middot; ${escapeHtml(sub.yearLevel)} ${escapeHtml(sub.semester)}</span>
-        ${!credited ? `<button type="button" class="btn-close btn-close-white" style="font-size:.55rem" onclick="removeAssignment('${sub.id}')" title="Remove"></button>` : ""}
-      </span>`;
-    })
-    .join("")}</div>`;
+  return `
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered assigned-table mb-0">
+        <thead>
+          <tr><th>Code</th><th>Subject Name</th><th>Year</th><th>Semester</th><th>Units</th><th>Status</th><th class="text-end">Action</th></tr>
+        </thead>
+        <tbody>
+          ${items
+            .map((sub) => {
+              const credited = currentCreditedMap.has(sub.id);
+              return `<tr>
+                <td class="subj-code-cell">${escapeHtml(sub.subjectCode)}</td>
+                <td>${escapeHtml(sub.subjectName)}</td>
+                <td>${escapeHtml(sub.yearLevel)}</td>
+                <td>${escapeHtml(sub.semester)}</td>
+                <td>${escapeHtml(sub.units)}</td>
+                <td>${credited ? `<span class="badge bg-secondary">Credited</span>` : `<span class="badge bg-info text-dark">Assigned</span>`}</td>
+                <td class="text-end">
+                  ${credited ? "" : `<button type="button" class="btn btn-sm btn-outline-danger" title="Remove assignment" onclick="removeAssignment('${sub.id}')"><i class="bi bi-x-lg"></i></button>`}
+                </td>
+              </tr>`;
+            })
+            .join("")}
+        </tbody>
+      </table>
+    </div>`;
 }
 
 async function saveAssignments(e, studentId) {

@@ -299,8 +299,24 @@ it is a low-cost fix.
   wrapped in a `d-flex flex-nowrap` group so they stay on one line instead
   of stacking vertically in the sticky Actions column.
 - **Evaluation page** — removed the redundant unit count next to each
-  subject's Credited/To take pill (units are already shown in each subject
-  box on the Assignment page; repeating it here just added clutter).
+  subject's Credited/To take pill, and removed the explanatory info banner
+  (kept the summary counters and progress bar). The Select Student panel is
+  now a top search bar + selected-student chip (same pattern as Subject
+  Assignment) instead of a sidebar list that loaded every student up front.
+
+## 11. Second UI pass (tables over boxes, form sections)
+
+- **Subject picker** (`admin/js/admin-assignments.js`) — reverted from the
+  box/card grid back to a table, grouped by Year → Semester like before,
+  with color-coded rows (left border + tint) for available / assigned /
+  credited / needs-prerequisite / off-plan. Clicking anywhere on a row still
+  toggles its checkbox. The **Currently Assigned** list is now a table
+  (Code, Name, Year, Semester, Units, Status, Remove) instead of pill
+  badges, for the same reason - clearer at a glance.
+- **Add Student form** — widened to `modal-lg` and split into labeled
+  sections (Student Type first, then Personal Information, Academic
+  Background, Enrollment Details, Status) so the fields read as a clear
+  top-to-bottom flow instead of a dense block of paired inputs.
 - **Evaluation page** (`shared/js/credit-eval-view.js`,
   `admin/js/admin-evaluations.js`) now leads with an explanatory line
   ("this is not a grade, it only tracks completion") and three summary

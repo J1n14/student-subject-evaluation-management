@@ -293,37 +293,27 @@ thead .sticky-col-end {
   padding: 0.6rem 0.9rem;
 }
 
-/* ---------- Subject Assignment: box/card picker ---------- */
-.subj-box-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-}
+/* ---------- Subject Assignment: picker table ---------- */
+.subj-picker-table { margin-bottom: 0; }
+.subj-picker-table th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: #7a7a90; border-top: none; }
+.subj-picker-table td { vertical-align: middle; font-size: 0.85rem; }
+.subj-picker-table td:first-child { border-left: 4px solid transparent; width: 2.2rem; }
+.subj-picker-table tr[data-subject-row] { cursor: pointer; }
+.subj-picker-table tr[data-subject-row]:hover td { background: rgba(39, 52, 105, 0.03); }
+.subj-picker-table .subj-code-cell { font-weight: 700; color: var(--brand-dark); }
 
-.subj-box {
-  width: 215px;
-  border: 2px solid rgba(39, 52, 105, 0.12);
-  border-radius: 10px;
-  padding: 0.65rem 0.75rem;
-  background: #fbfbfe;
-  cursor: pointer;
-  transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
-  user-select: none;
-}
-.subj-box:hover { box-shadow: 0 6px 16px rgba(0, 0, 0, 0.09); transform: translateY(-1px); }
-.subj-box .subj-box-top { display: flex; align-items: flex-start; gap: 0.4rem; }
-.subj-box .subj-box-code { font-weight: 700; font-size: 0.85rem; color: var(--brand-dark); }
-.subj-box .subj-box-name { font-size: 0.78rem; color: #4a4a5a; margin: 0.2rem 0 0.4rem; line-height: 1.25; min-height: 2.1em; }
-.subj-box .subj-box-foot { display: flex; justify-content: space-between; align-items: center; font-size: 0.7rem; color: #9a9ab0; }
-.subj-box .subj-box-badges { margin-top: 0.35rem; display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.subj-picker-table tr.row-available td:first-child { border-left-color: #2e9e6a; }
+.subj-picker-table tr.row-assigned td { background: #eef5fc; }
+.subj-picker-table tr.row-assigned td:first-child { border-left-color: #3a86c8; }
+.subj-picker-table tr.row-credited td { background: #f5f5f7; color: #9a9ab0; }
+.subj-picker-table tr.row-credited td:first-child { border-left-color: #adb5bd; }
+.subj-picker-table tr.row-prereq td { background: #fff8ec; }
+.subj-picker-table tr.row-prereq td:first-child { border-left-color: #e2a53a; }
+.subj-picker-table tr.row-offplan td:first-child { border-left: 4px dashed #adb5bd; }
 
-.subj-box.box-available { border-color: rgba(46, 158, 106, 0.45); }
-.subj-box.box-available:hover { border-color: #2e9e6a; }
-.subj-box.box-assigned { border-color: #3a86c8; background: #eef5fc; }
-.subj-box.box-credited { border-color: rgba(39, 52, 105, 0.15); background: #f0f0f4; opacity: 0.72; cursor: not-allowed; }
-.subj-box.box-credited:hover { box-shadow: none; transform: none; }
-.subj-box.box-prereq { border-color: #e2a53a; background: #fff8ec; }
-.subj-box.box-offplan { border-style: dashed; border-color: #adb5bd; }
+/* ---------- Subject Assignment / Evaluation: currently-assigned table ---------- */
+.assigned-table td, .assigned-table th { vertical-align: middle; font-size: 0.85rem; }
+.assigned-table th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: #7a7a90; border-top: none; }
 
 /* ---------- Print (Reports) ---------- */
 @media print {
