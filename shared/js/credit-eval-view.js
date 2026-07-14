@@ -100,6 +100,13 @@ function _renderEvalShell() {
         <span class="legend-dot bg-warning ms-3"></span>Prerequisite needed
       </div>
       <div class="d-flex align-items-center gap-2">
+        ${
+          st.interactive && remaining > 0
+            ? `<button type="button" class="btn btn-sm btn-outline-success" onclick="markAllCredited()">
+                 <i class="bi bi-check2-all me-1"></i>Mark All Credited (${remaining})
+               </button>`
+            : ""
+        }
         <label class="small text-muted mb-0">View</label>
         ${filterSelect}
       </div>

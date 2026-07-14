@@ -2,7 +2,48 @@ let assignStudents = [];
 let assignSubjects = []; // full subject catalog (needed for curriculum/track matching + prereq lookup)
 let currentAssignments = []; // studentSubjects docs for the selected student
 let currentCreditedMap = new Map(); // subjectId -> credited record for the selected student
-let currentAssignStudent = null; // the currently selected student (used by the Transfer Credit modal)
+
+// Admin-configurable unit load policy, stored at settings/unitPolicy.
+// Falls back to these defaults until an admin saves their own values.
+let unitPolicy = { minUnits: 15, maxUnits: 24 };
+
+async function loadUnitPolicy() {
+  try {
+    const doc = await db.collection("settings").doc("unitPolicy").get();
+    if (doc.exists) {
+      const d = doc.data();
+      if (d.minUnits != null) unitPolicy.minUnits = Number(d.minUnits);
+      if (d.maxUnits != null) unitPolicy.maxUnits = Number(d.maxUnits);
+    }
+  } catch (err) {
+    console.warn("Could not load unit policy, using defaults.", err);
+  }
+  const minInput = document.getElementById("policy-min-units");
+  const maxInput = document.getElementById("policy-max-units");
+  if (minInput) minInput.value = unitPolicy.minUnits;
+  if (maxInput) maxInput.value = unitPolicy.maxUnits;
+}
+
+async function saveUnitPolicy(e) {
+  e.preventDefault();
+  const minUnits = Number(document.getElementById("policy-min-units").value);
+  const maxUnits = Number(document.getElementById("policy-max-units").value);
+  if (!minUnits || !maxUnits || minUnits > maxUnits) {
+    showToast("Enter a valid minimum and maximum (minimum must not exceed maximum).", "error");
+    return;
+  }
+  try {
+    await db.collection("settings").doc("unitPolicy").set(
+      { minUnits, maxUnits, updatedAt: serverTimestamp(), updatedBy: auth.currentUser.email },
+      { merge: true }
+    );
+    unitPolicy = { minUnits, maxUnits };
+    showToast("Unit load policy saved.");
+    updateSelectedUnitsTotal();
+  } catch (err) {
+    showError(err, "Failed to save unit policy.");
+  }
+}
 
 const SEMESTER_ORDER = ["1st Semester", "2nd Semester", "Midterm", "Summer"];
 
@@ -31,11 +72,30 @@ function unmetPrerequisites(subject, creditedMap) {
 
 async function initAdminAssignments(content) {
   content.innerHTML = `
+    <div class="section-card mb-3">
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+        <div>
+          <h6 class="mb-1"><i class="bi bi-sliders me-1"></i>Unit Load Policy</h6>
+          <div class="text-muted small">Used to flag overload/underload when saving a subject assignment.</div>
+        </div>
+        <form id="unit-policy-form" class="d-flex align-items-end gap-2">
+          <div>
+            <label class="form-label small mb-1">Min units</label>
+            <input type="number" min="1" class="form-control form-control-sm" id="policy-min-units" style="width:90px" />
+          </div>
+          <div>
+            <label class="form-label small mb-1">Max units</label>
+            <input type="number" min="1" class="form-control form-control-sm" id="policy-max-units" style="width:90px" />
+          </div>
+          <button type="submit" class="btn btn-sm btn-primary">Save Policy</button>
+        </form>
+      </div>
+    </div>
     <div class="row g-3">
       <div class="col-lg-4">
         <div class="section-card">
           <h6 class="mb-3"><i class="bi bi-person-check me-1"></i>Select Student</h6>
-          <input type="text" class="form-control mb-2" placeholder="Search student..." id="student-search" />
+          <input type="text" class="form-control mb-2" placeholder="Search by name or SR Code..." id="student-search" />
           <div class="list-group" id="student-list" style="max-height:520px; overflow-y:auto;"></div>
         </div>
       </div>
@@ -52,6 +112,7 @@ async function initAdminAssignments(content) {
     </div>`;
 
   document.getElementById("student-search").addEventListener("input", debounce(renderStudentList, 200));
+  document.getElementById("unit-policy-form").addEventListener("submit", saveUnitPolicy);
 
   // Load the FULL subject catalog (not just the current year, and not just
   // "Active") so we can match by curriculum + track and resolve prerequisites.
@@ -61,6 +122,7 @@ async function initAdminAssignments(content) {
   ]);
   assignStudents = studentsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
   assignSubjects = subjectsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  await loadUnitPolicy();
   renderStudentList();
 }
 
@@ -84,7 +146,6 @@ function renderStudentList() {
 
 async function selectStudentForAssignment(studentId) {
   const student = assignStudents.find((s) => s.id === studentId);
-  currentAssignStudent = student;
   const panel = document.getElementById("assignment-panel");
   panel.innerHTML = `<div class="text-muted small">Loading...</div>`;
 
@@ -129,14 +190,7 @@ async function selectStudentForAssignment(studentId) {
         <h5 class="mb-0">${escapeHtml(student.fullName)}</h5>
         <div class="text-muted small">${escapeHtml(student.id)} &middot; ${escapeOrDash(student.curriculum)} &middot; ${escapeHtml(student.track)} &middot; ${escapeHtml(student.yearLevel)}</div>
       </div>
-      <div class="text-end">
-        ${statusBadge(student.status || "Pending")}
-        <div class="mt-2">
-          <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#transferCreditModal" onclick="openTransferCreditModal()">
-            <i class="bi bi-award me-1"></i>Add Transfer Credit
-          </button>
-        </div>
-      </div>
+      ${statusBadge(student.status || "Pending")}
     </div>
 
     ${emptyNotice}
@@ -169,48 +223,18 @@ async function selectStudentForAssignment(studentId) {
           </tbody>
         </table>
       </div>
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+        <div class="small">
+          Selected units: <strong id="selected-units-total">0</strong>
+          <span class="text-muted" id="unit-policy-hint"></span>
+        </div>
+      </div>
       <div class="d-flex gap-2 flex-wrap">
         <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Save Assignment</button>
         <button type="button" class="btn btn-outline-success" id="assign-all-btn"><i class="bi bi-check2-all me-1"></i>Assign all still-to-take</button>
+        <button type="button" class="btn btn-outline-secondary" id="unselect-all-btn"><i class="bi bi-x-square me-1"></i>Unselect All</button>
       </div>
     </form>
-
-    <div class="modal fade" id="transferCreditModal" tabindex="-1">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">Add Transfer Credit</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-          </div>
-          <form id="transfer-credit-form" class="needs-validation" novalidate>
-            <div class="modal-body">
-              <p class="text-muted small">For a transferee: manually credit a subject already completed at their previous school, so it's marked done instead of needing to be taken here.</p>
-              <div class="mb-3">
-                <label class="form-label">Subject</label>
-                <select class="form-select" id="transferCreditSubjectId" required>
-                  <option value="">Select subject</option>
-                </select>
-                <div class="invalid-feedback">Select a subject.</div>
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Credited From (previous school course)</label>
-                <input type="text" class="form-control" id="transferCreditedFrom" placeholder="e.g. GE 1102 - Mathematics in the Modern World" required />
-                <div class="invalid-feedback">Required.</div>
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Remarks</label>
-                <input type="text" class="form-control" id="transferCreditRemarks" placeholder="Optional" />
-              </div>
-            </div>
-            <div class="modal-footer">
-              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-              <button type="submit" class="btn btn-primary" id="transfer-credit-save-btn">Save</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-
     <hr/>
     <h6 class="mt-3">Currently Assigned</h6>
     <div id="current-assignments-list">${renderCurrentAssignmentsList(assignedIds)}</div>`;
@@ -219,68 +243,55 @@ async function selectStudentForAssignment(studentId) {
   document.getElementById("subject-picker-search").addEventListener("input", debounce(filterSubjectPicker, 150));
   document.getElementById("subject-picker-year").addEventListener("change", filterSubjectPicker);
   document.getElementById("subject-picker-semester").addEventListener("change", filterSubjectPicker);
-  document.getElementById("assign-all-btn").addEventListener("click", selectAllStillToTake);
-  document.getElementById("transfer-credit-form").addEventListener("submit", saveTransferCredit);
+  document.getElementById("assign-all-btn").addEventListener("click", () => {
+    selectAllStillToTake();
+    updateSelectedUnitsTotal();
+  });
+  document.getElementById("unselect-all-btn").addEventListener("click", unselectAll);
+  document.getElementById("subject-picker-table").addEventListener("change", (e) => {
+    if (e.target.matches('input[type="checkbox"]')) updateSelectedUnitsTotal();
+  });
 
+  await loadUnitPolicy();
   filterSubjectPicker(); // apply the default (current-year) filter immediately
+  updateSelectedUnitsTotal();
 }
 
-// Populates the Transfer Credit modal's subject dropdown with the student's
-// required-plan subjects that aren't already credited.
-function openTransferCreditModal() {
-  const form = document.getElementById("transfer-credit-form");
-  form.classList.remove("was-validated");
-  form.reset();
-
-  const requiredSubjects = getRequiredSubjects(currentAssignStudent, assignSubjects);
-  const eligible = requiredSubjects.filter((s) => !currentCreditedMap.has(s.id));
-
-  const select = document.getElementById("transferCreditSubjectId");
-  select.innerHTML = eligible.length
-    ? `<option value="">Select subject</option>` +
-      eligible.map((s) => `<option value="${s.id}">${escapeHtml(s.subjectCode)} - ${escapeHtml(s.subjectName)}</option>`).join("")
-    : `<option value="" disabled selected>No eligible subjects - everything required is already credited</option>`;
-}
-
-async function saveTransferCredit(e) {
-  e.preventDefault();
-  const form = e.target;
-  if (!validateForm(form)) return;
-
-  const studentId = currentAssignStudent.id;
-  const subjectId = document.getElementById("transferCreditSubjectId").value;
-  const btn = document.getElementById("transfer-credit-save-btn");
-  btn.disabled = true;
-
-  try {
-    const docId = `${studentId}_${subjectId}`;
-    await db.collection("creditedSubjects").doc(docId).set(
-      {
-        studentId,
-        subjectId,
-        creditedFrom: document.getElementById("transferCreditedFrom").value.trim(),
-        remarks: document.getElementById("transferCreditRemarks").value.trim(),
-        creditedBy: auth.currentUser.email,
-        creditedAt: serverTimestamp()
-      },
-      { merge: true }
-    );
-
-    await logActivity(`Saved transfer credit for student ${studentId}`);
-    const newStatus = await recomputeCreditStatus(studentId);
-    showToast(`Transfer credit saved. Student status: ${newStatus}.`);
-
-    const idx = assignStudents.findIndex((s) => s.id === studentId);
-    if (idx > -1) assignStudents[idx].status = newStatus;
-    renderStudentList();
-
-    bootstrap.Modal.getInstance(document.getElementById("transferCreditModal")).hide();
-    await selectStudentForAssignment(studentId);
-  } catch (err) {
-    showError(err, "Failed to save transfer credit.");
-  } finally {
-    btn.disabled = false;
+// Unchecks every non-disabled (i.e. not-already-credited) checkbox currently
+// in the picker, regardless of the active year/semester/search filter, so a
+// full reset always works even if a filter is narrowing the view.
+function unselectAll() {
+  const boxes = document.querySelectorAll('#subject-picker-table input[type=checkbox]:not(:disabled)');
+  let count = 0;
+  boxes.forEach((b) => {
+    if (b.checked) {
+      b.checked = false;
+      count++;
+    }
+  });
+  updateSelectedUnitsTotal();
+  if (count === 0) {
+    showToast("Nothing was selected.", "info");
+  } else {
+    showToast(`Unselected ${count} subject(s).`, "info");
   }
+}
+
+function updateSelectedUnitsTotal() {
+  const checked = [...document.querySelectorAll('#assignment-form input[type=checkbox]:checked')];
+  const total = checked.reduce((sum, box) => {
+    const sub = assignSubjects.find((s) => s.id === box.value);
+    return sum + (sub ? Number(sub.units) || 0 : 0);
+  }, 0);
+  const totalEl = document.getElementById("selected-units-total");
+  if (totalEl) totalEl.textContent = total;
+
+  const hintEl = document.getElementById("unit-policy-hint");
+  if (hintEl && unitPolicy) {
+    hintEl.textContent = `(policy: ${unitPolicy.minUnits}-${unitPolicy.maxUnits} units)`;
+    totalEl.className = total > unitPolicy.maxUnits ? "text-danger" : total < unitPolicy.minUnits ? "text-warning" : "text-success";
+  }
+  return total;
 }
 
 // Ticks every "still to take" subject currently visible in the picker
@@ -377,15 +388,43 @@ async function saveAssignments(e, studentId) {
     return;
   }
 
+  // Unit load check against the admin-configured policy (see the Unit Load
+  // Policy panel at the top of this page). Overload requires an explicit
+  // Yes/No confirmation per the required workflow; underload is flagged the
+  // same way so an admin can consciously override either direction.
+  const totalUnits = checked.reduce((sum, id) => {
+    const sub = assignSubjects.find((s) => s.id === id);
+    return sum + (sub ? Number(sub.units) || 0 : 0);
+  }, 0);
+
+  if (totalUnits > unitPolicy.maxUnits) {
+    const allowOverload = confirm(
+      `This assignment totals ${totalUnits} units, exceeding the maximum load of ${unitPolicy.maxUnits} units.\n\nAllow this student to overload?\nOK = Yes, Cancel = No.`
+    );
+    if (!allowOverload) {
+      showToast("Save cancelled. Adjust the selection to fit the unit limit, or confirm the overload.", "warning");
+      return;
+    }
+  } else if (checked.length > 0 && totalUnits < unitPolicy.minUnits) {
+    const allowUnderload = confirm(
+      `This assignment totals ${totalUnits} units, below the minimum load of ${unitPolicy.minUnits} units (underload).\n\nSave anyway?\nOK = Yes, Cancel = No.`
+    );
+    if (!allowUnderload) {
+      showToast("Save cancelled. Add more subjects to meet the minimum load, or confirm the underload.", "warning");
+      return;
+    }
+  }
+
   try {
     const batch = db.batch();
+    const isOverload = totalUnits > unitPolicy.maxUnits;
     toAdd.forEach((subjectId) => {
       const ref = db.collection("studentSubjects").doc();
-      batch.set(ref, { studentId, subjectId, assignedAt: serverTimestamp() });
+      batch.set(ref, { studentId, subjectId, assignedAt: serverTimestamp(), overload: isOverload });
     });
     toRemove.forEach((a) => batch.delete(db.collection("studentSubjects").doc(a.id)));
     await batch.commit();
-    await logActivity(`Updated subject assignments for student ${studentId}`);
+    await logActivity(`Updated subject assignments for student ${studentId} (${totalUnits} units${isOverload ? ", overload approved" : ""})`);
     showToast("Assignment saved.");
     await selectStudentForAssignment(studentId);
   } catch (err) {

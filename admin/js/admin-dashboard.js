@@ -124,7 +124,7 @@ async function loadRecentCreditedSubjects() {
   );
   document.getElementById("recent-credits").innerHTML = `
     <div class="table-responsive"><table class="table table-sm align-middle mb-0">
-      <thead><tr><th>Student</th><th>Subject</th><th>When</th></tr></thead>
+      <thead><tr><th>Student</th><th>Course Code</th><th>When</th></tr></thead>
       <tbody>${rows.join("")}</tbody>
     </table></div>`;
 }

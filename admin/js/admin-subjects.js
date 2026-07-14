@@ -16,7 +16,7 @@ async function initAdminSubjects(content) {
           </select>
           <select class="form-select" style="width:180px" id="filter-track">
             <option value="">Any Track</option>
-            <option>All Tracks</option>
+            <option>General</option>
             <option>Network Technology</option>
             <option>Service Management</option>
             <option>Business Analytics</option>
@@ -95,7 +95,7 @@ async function initAdminSubjects(content) {
                   <label class="form-label">Track</label>
                   <select class="form-select" id="track" required>
                     <option value="">Select</option>
-                    <option>All Tracks</option>
+                    <option>General</option>
                     <option>Network Technology</option>
                     <option>Service Management</option>
                     <option>Business Analytics</option>
@@ -170,7 +170,10 @@ function renderSubjectsTable() {
     const matchesSearch = !search || (s.subjectCode || "").toLowerCase().includes(search) || (s.subjectName || "").toLowerCase().includes(search);
     const matchesYear = !yearFilter || s.yearLevel === yearFilter;
     const matchesSem = !semFilter || s.semester === semFilter;
-    const matchesTrack = !trackFilter || s.track === trackFilter;
+    // "General" is the current label for subjects that apply to every track;
+    // "All Tracks" is the legacy stored value from before the rename.
+    const matchesTrack =
+      !trackFilter || s.track === trackFilter || (trackFilter === "General" && s.track === "All Tracks");
     const matchesCurriculum =
       !curriculumFilter || (curriculumFilter === "__untagged" ? !s.curriculum : s.curriculum === curriculumFilter);
     const matchesStatus = !statusFilter || s.status === statusFilter;

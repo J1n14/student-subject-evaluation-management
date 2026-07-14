@@ -20,13 +20,17 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 const storage = firebase.storage ? firebase.storage() : null;
 
-// Offline support (optional) - safe to ignore failures (e.g. multiple tabs open)
-db.enablePersistence().catch((err) => {
-  console.warn("Firestore offline persistence not enabled:", err.code);
-});
+// NOTE: Firestore offline persistence (db.enablePersistence()) is
+// intentionally NOT enabled. It writes to IndexedDB, which on some browsers
+// contends with Firebase Auth's own IndexedDB-based session storage during a
+// fast full-page redirect (login -> dashboard). That race is what caused the
+// "have to log in twice / bounced back to the login page" bug. Since offline
+// support was optional for this app, the safest fix is to leave it off.
 
-// Session persistence - stay logged in across browser restarts
-auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+// Session persistence - stay logged in across browser restarts.
+// Exposed as a promise so auth.js can await it before signing in, closing
+// out any remaining race between persistence setup and sign-in.
+const authPersistenceReady = auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
 
 const FieldValue = firebase.firestore.FieldValue;
 const serverTimestamp = () => FieldValue.serverTimestamp();

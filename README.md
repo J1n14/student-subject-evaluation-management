@@ -11,8 +11,10 @@ plus a `shared/` folder for code used by both. No build step - the app can
 be opened or hosted as-is.
 
 ```
-index.html            Student login (also the site's landing page)
-admin-login.html       Admin login (not linked from index.html - go to it directly)
+index.html            Home page - choose Admin Portal or Student Portal
+admin-login.html      Admin login (linked from index.html)
+student-login.html    Student login (linked from index.html; students never
+                       self-register, see section 4)
 admin/
   html/                admin-dashboard, admin-students, admin-subjects,
                        admin-assignments, admin-evaluations, admin-reports
@@ -32,6 +34,9 @@ firebase/
   seed-new-curriculum.js  One-time script: bulk-seeds the New-curriculum
                        subject catalog, reusing/updating any matching
                        legacy (untagged) subjects and deleting the rest
+  migrate-track-label.js  One-time script: renames the legacy "All Tracks"
+                       subject.track value to "General" on already-saved
+                       data (optional - the app matches both values anyway)
   serviceAccountKey.json   Admin SDK credential (gitignored, not committed)
 firebase.json          Hosting/deploy config (stays at project root - required
                        by the Firebase CLI)
@@ -48,7 +53,7 @@ package.json           Node deps for firebase/create-admin.js (firebase-admin)
 | `admin/html/admin-dashboard.html` / `admin/js/admin-dashboard.js` | Admin dashboard: summary cards, recent credited subjects, credit status chart |
 | `admin/html/admin-students.html` / `admin/js/admin-students.js` | Student CRUD, search, filter, pagination |
 | `admin/html/admin-subjects.html` / `admin/js/admin-subjects.js` | Subject CRUD (including Curriculum and Prerequisite) |
-| `admin/html/admin-assignments.html` / `admin/js/admin-assignments.js` | Assign/remove subjects per student |
+| `admin/html/admin-assignments.html` / `admin/js/admin-assignments.js` | Assign/remove subjects per student, with a running unit total, an admin-editable min/max Unit Load Policy, and overload/underload confirmation prompts |
 | `admin/html/admin-evaluations.html` / `admin/js/admin-evaluations.js` | Credit Evaluation: progress ring/bars, Credited Subjects (manual transcript credits), Subjects Still To Take against curriculum requirements |
 | `admin/html/admin-reports.html` / `admin/js/admin-reports.js` | Printable reports (summary / assignments / credited subjects) |
 | `student/html/student-dashboard.html` / `student/js/student-dashboard.js` | Student welcome + status overview |
@@ -111,30 +116,42 @@ Any further Admin accounts can be created the same way, or you can extend
 ## 4. How students get accounts
 
 Students never self-register. An Admin creates the full account in one step
-via **Admin → Students → Add Student** (Student ID, Full Name, Email, Source
-College, Curriculum, Track, Year Level):
+via **Admin → Students → Add Student** (First/Last Name, Email, Source
+College, Course, Curriculum, Track, Year Level, Student Type, Academic Year):
 
-1. The client creates the Firebase Auth account immediately - **email** as
-   entered, and **password = the Student ID** (must be at least 6 characters,
-   since Firebase requires a 6-character minimum password).
-2. It then writes `students/{studentId}` (including the new `uid`) and
+1. The **SR Code** (the student's record ID / doc key) is generated
+   automatically - the admin never types one. It's sequenced per academic
+   year, e.g. `SR-25-00001`, and is shown read-only once the record exists.
+2. The client creates the Firebase Auth account immediately - **email** as
+   entered, and **password = the student's Last Name** (padded with zeros to
+   6 characters if their last name is shorter, since Firebase requires a
+   6-character minimum password). The exact password used is shown in the
+   confirmation toast after saving so you can pass it on to the student.
+3. It then writes `students/{srCode}` (including the new `uid`) and
    `users/{uid}` with `role: 'student'`.
-3. The student logs in at `index.html` using their email and their
-   Student ID as the password.
+4. The student logs in at `student-login.html` using their email and their
+   Last Name as the password.
+
+Student Type is one of **Regular, Irregular, Returnee, Transferee, Failed**.
+Regular still auto-credits every lower-year subject in the student's plan
+(unchanged behavior). Returnee, Transferee, and Failed reveal a **Last School
+Year Attended** field; Transferee additionally reveals **Previous School**.
 
 This uses a throwaway secondary Firebase App instance under the hood
 (`createStudentAuthAccount()` in `admin-students.js`) so creating the
 student's login doesn't sign the Admin out of their own session - the
 Firebase JS SDK otherwise only tracks one signed-in user per browser per app.
 
-Note: a Student ID as a password is predictable/guessable. Consider having
-students change it after first login if you add that capability later.
+Note: a Last Name as a password is predictable/guessable, same tradeoff as
+the previous Student-ID-as-password scheme. Consider having students change
+it after first login if you add that capability later.
 
 ## 5. Running locally
 
 No build step needed. Two options:
 
-- **Quickest:** open `index.html` directly in a browser. (Firebase Auth
+- **Quickest:** open `index.html` directly in a browser - it's the home page.
+  (Firebase Auth
   works fine from `file://`, though some browsers restrict persistence —
   serving over HTTP is more reliable.)
 - **Recommended:** serve the folder locally, e.g.:
@@ -156,17 +173,36 @@ Your app will be live at `https://YOUR_PROJECT_ID.web.app`.
 
 ```
 users/{uid}            { role, email, fullName, studentId, createdAt, updatedAt }
-students/{studentId}   { firstName, lastName, fullName, email, college, course, curriculum, track, yearLevel, status, uid, createdAt, updatedAt }
+students/{srCode}       { firstName, lastName, fullName, email, college, course, curriculum, track,
+                          yearLevel, studentType, academicYear, lastSchoolYearAttended, previousSchool,
+                          status, uid, createdAt, updatedAt }
 subjects/{subjectId}   { subjectCode, subjectName, units, yearLevel, semester, academicYear, track, curriculum, prerequisite, status, createdAt, updatedAt }
-studentSubjects/{id}   { studentId, subjectId, assignedAt }
+studentSubjects/{id}   { studentId, subjectId, assignedAt, overload }
 creditedSubjects/{studentId_subjectId}  { studentId, subjectId, creditedFrom, grade, remarks, creditedBy, creditedAt }
 activityLogs/{id}      { userId, email, action, timestamp }
+settings/unitPolicy    { minUnits, maxUnits, updatedAt, updatedBy }
 ```
 
 Notes:
+- `students/{srCode}` doc IDs (the "SR Code") are generated automatically by
+  the app when a student is added - format `SR-{2-digit academic year}-{5-digit
+  sequence}`, e.g. `SR-25-00001`. Admins never type one manually.
+- `students.studentType` is one of `Regular`, `Irregular`, `Returnee`,
+  `Transferee`, `Failed`. Only `Regular` triggers `autoCreditLowerYears()`.
+  `lastSchoolYearAttended` is set for Returnee/Transferee/Failed;
+  `previousSchool` is set only for Transferee.
+- `studentSubjects.overload` is `true` if the assignment was saved while its
+  total units exceeded `settings/unitPolicy.maxUnits` and the admin confirmed
+  the overload prompt. Purely informational (for reporting), doesn't block
+  anything on its own.
+- `settings/unitPolicy` holds the admin-editable min/max unit load used by
+  the overload/underload confirmation on **Admin → Subject Assignment**.
+  Defaults to 15-24 units until an admin saves their own values there.
 - `creditedSubjects` documents use a deterministic ID (`studentId_subjectId`)
   and are written with `{ merge: true }`, so re-saving **updates** the
-  existing record instead of creating a duplicate.
+  existing record instead of creating a duplicate. The **Mark All Credited**
+  button on **Admin → Evaluations** batch-writes one of these per remaining
+  required subject in a single confirm step.
 - There is no Pass/Fail/Incomplete grading concept in this system — a
   subject only counts as complete for a student once an admin manually
   records it in `creditedSubjects` (Admin → Evaluations → Credit
@@ -181,8 +217,11 @@ Notes:
 - `subjects.curriculum` (`"Old"`/`"New"`) mirrors `students.curriculum`;
   subjects without this field set (all subjects created before this feature)
   are treated as `"New"` curriculum when matching against a student's plan.
-- `subjects.track` similarly falls back to matching every track if unset
-  (legacy subjects created before the Track field existed).
+- `subjects.track` similarly falls back to matching every track if unset. The
+  value for "applies to every track" is `"General"` (renamed from the
+  original `"All Tracks"` label - both values still match everywhere; run
+  `firebase/migrate-track-label.js` once to relabel existing data if you
+  want the stored value to read "General" too).
 - `subjects.prerequisite` is an optional free-text `subjectCode` (or
   comma-separated list of codes) checked by the Credit Evaluation view to
   explain why a subject can't yet be credited.
@@ -209,4 +248,18 @@ Notes:
   never write to subjects, assignments, or credited subjects.
 - `activityLogs` can be written by any signed-in user for themselves, but
   only read by Admins (used for the "Recent Student Logins" dashboard card).
+- `settings` (currently just `settings/unitPolicy`) is Admin-only for both
+  read and write.
 - Full details in `firebase/firestore.rules`.
+
+## 9. Fixed: had to log in twice / bounced back to the login page
+
+Firestore offline persistence (`db.enablePersistence()`) was removed from
+`shared/js/firebase-config.js`. It writes to IndexedDB, which on some
+browsers contends with Firebase Auth's own IndexedDB-based session storage
+during a fast full-page redirect (login page → dashboard page). That race
+was what caused the double-login symptom. `shared/js/auth.js`'s
+`requireRole()` also now gives the Auth SDK a short grace window before
+concluding no one is logged in, as a second layer of protection against the
+same class of race. Offline support was optional for this app, so removing
+it is a low-cost fix.

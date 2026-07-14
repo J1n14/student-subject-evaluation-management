@@ -7,7 +7,7 @@ async function initAdminStudents(content) {
     <div class="section-card">
       <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
         <div class="d-flex gap-2 flex-wrap">
-          <input type="text" class="form-control" style="width:220px" placeholder="Search name, ID, or email" id="search-input" />
+          <input type="text" class="form-control" style="width:220px" placeholder="Search name, SR Code, or email" id="search-input" />
           <select class="form-select" style="width:190px" id="filter-track">
             <option value="">All Tracks</option>
             <option>Network Technology</option>
@@ -28,7 +28,7 @@ async function initAdminStudents(content) {
       <div class="table-responsive">
         <table class="table table-hover align-middle">
           <thead>
-            <tr><th>Student ID</th><th>Full Name</th><th>Email</th><th>Source College</th><th>Course</th><th>Curriculum</th><th>Track</th><th>Year</th><th>Type</th><th>Status</th><th class="text-end">Actions</th></tr>
+            <tr><th>SR Code</th><th>Full Name</th><th>Email</th><th>Source College</th><th>Course</th><th>Curriculum</th><th>Track</th><th>Year</th><th>Type</th><th>Status</th><th class="text-end">Actions</th></tr>
           </thead>
           <tbody id="students-tbody"></tbody>
         </table>
@@ -50,11 +50,14 @@ async function initAdminStudents(content) {
           <form id="student-form" class="needs-validation" novalidate>
             <div class="modal-body">
               <input type="hidden" id="studentDocId" />
-              <div class="mb-3">
-                <label class="form-label">Student ID</label>
-                <input type="text" class="form-control" id="studentId" required minlength="6" />
-                <div class="form-text" id="studentIdHelp">Also used as the student's initial login password (min. 6 characters).</div>
-                <div class="invalid-feedback">Student ID is required and must be at least 6 characters.</div>
+              <div class="mb-3" id="srCodeWrap" style="display:none">
+                <label class="form-label">SR Code</label>
+                <input type="text" class="form-control" id="studentId" disabled />
+                <div class="form-text">System-generated student record code.</div>
+              </div>
+              <div class="alert alert-light border small mb-3" id="newStudentIdNotice">
+                <i class="bi bi-info-circle me-1"></i>An SR Code will be generated automatically when you save. The student's
+                initial login password will be their <strong>Last Name</strong> (padded if shorter than 6 characters).
               </div>
               <div class="row">
                 <div class="col-6 mb-3">
@@ -121,10 +124,30 @@ async function initAdminStudents(content) {
                     <option value="">Select</option>
                     <option>Regular</option>
                     <option>Irregular</option>
+                    <option>Returnee</option>
+                    <option>Transferee</option>
+                    <option>Failed</option>
                   </select>
-                  <div class="form-text">Regular auto-credits all lower-year subjects.</div>
+                  <div class="form-text" id="studentTypeHelp">Regular auto-credits all lower-year subjects.</div>
                   <div class="invalid-feedback">Select a student type.</div>
                 </div>
+              </div>
+              <div class="row">
+                <div class="col-6 mb-3">
+                  <label class="form-label">Academic Year</label>
+                  <input type="text" class="form-control" id="academicYear" placeholder="e.g. 2025-2026" required />
+                  <div class="invalid-feedback">Academic year is required.</div>
+                </div>
+                <div class="col-6 mb-3" id="lastSchoolYearWrap" style="display:none">
+                  <label class="form-label">Last School Year Attended</label>
+                  <input type="text" class="form-control" id="lastSchoolYearAttended" placeholder="e.g. 2023-2024" />
+                  <div class="invalid-feedback">Required for this student type.</div>
+                </div>
+              </div>
+              <div class="mb-3" id="previousSchoolWrap" style="display:none">
+                <label class="form-label">Previous School</label>
+                <input type="text" class="form-control" id="previousSchool" placeholder="School the student transferred from" />
+                <div class="invalid-feedback">Required for transferees.</div>
               </div>
               <div class="mb-3" id="statusFieldWrap" style="display:none">
                 <label class="form-label">Status</label>
@@ -156,11 +179,43 @@ async function initAdminStudents(content) {
     </div>`;
 
   document.getElementById("student-form").addEventListener("submit", saveStudent);
+  document.getElementById("studentType").addEventListener("change", updateStudentTypeFields);
   document.getElementById("search-input").addEventListener("input", debounce(() => { studentsPage = 1; renderStudentsTable(); }, 250));
   document.getElementById("filter-track").addEventListener("change", () => { studentsPage = 1; renderStudentsTable(); });
   document.getElementById("filter-status").addEventListener("change", () => { studentsPage = 1; renderStudentsTable(); });
 
   await loadStudents();
+}
+
+// Student Type drives which extra fields apply:
+//  - Regular / Irregular: no admission-history fields needed.
+//  - Returnee / Failed: needs Last School Year Attended.
+//  - Transferee: needs Last School Year Attended + Previous School.
+function updateStudentTypeFields() {
+  const type = document.getElementById("studentType").value;
+  const needsLastYear = ["Returnee", "Transferee", "Failed"].includes(type);
+  const needsPrevSchool = type === "Transferee";
+
+  const lastYearWrap = document.getElementById("lastSchoolYearWrap");
+  const lastYearInput = document.getElementById("lastSchoolYearAttended");
+  lastYearWrap.style.display = needsLastYear ? "block" : "none";
+  lastYearInput.required = needsLastYear;
+  if (!needsLastYear) lastYearInput.value = "";
+
+  const prevSchoolWrap = document.getElementById("previousSchoolWrap");
+  const prevSchoolInput = document.getElementById("previousSchool");
+  prevSchoolWrap.style.display = needsPrevSchool ? "block" : "none";
+  prevSchoolInput.required = needsPrevSchool;
+  if (!needsPrevSchool) prevSchoolInput.value = "";
+
+  document.getElementById("studentTypeHelp").textContent =
+    type === "Regular"
+      ? "Regular auto-credits all lower-year subjects."
+      : type === "Transferee"
+      ? "Record where the student is coming from below."
+      : needsLastYear
+      ? "Record the last school year they attended below."
+      : "";
 }
 
 async function loadStudents() {
@@ -225,16 +280,18 @@ function openStudentModal(id) {
   form.reset();
   document.getElementById("statusFieldWrap").style.display = "none";
   document.getElementById("studentDocId").value = "";
-  document.getElementById("studentId").disabled = false;
-  document.getElementById("studentIdHelp").style.display = "block";
 
   if (id) {
     const s = allStudents.find((x) => x.id === id);
     document.getElementById("studentModalTitle").textContent = "Edit Student";
     document.getElementById("studentDocId").value = id;
+
+    // Existing student: show their generated SR Code (read-only) and hide
+    // the "will be generated" notice; editing never touches the password.
+    document.getElementById("srCodeWrap").style.display = "block";
+    document.getElementById("newStudentIdNotice").style.display = "none";
     document.getElementById("studentId").value = s.id;
-    document.getElementById("studentId").disabled = true; // ID is the doc key, don't allow changing
-    document.getElementById("studentIdHelp").style.display = "none"; // editing never touches the login password
+
     const [fallbackFirst, ...fallbackRest] = (s.fullName || "").split(" ");
     document.getElementById("firstName").value = s.firstName || fallbackFirst || "";
     document.getElementById("lastName").value = s.lastName || fallbackRest.join(" ") || "";
@@ -245,11 +302,46 @@ function openStudentModal(id) {
     document.getElementById("track").value = s.track || "";
     document.getElementById("yearLevel").value = s.yearLevel || "";
     document.getElementById("studentType").value = s.studentType || "";
+    document.getElementById("academicYear").value = s.academicYear || "";
+    document.getElementById("lastSchoolYearAttended").value = s.lastSchoolYearAttended || "";
+    document.getElementById("previousSchool").value = s.previousSchool || "";
     document.getElementById("status").value = s.status || "Pending";
     document.getElementById("statusFieldWrap").style.display = "block";
+    updateStudentTypeFields();
   } else {
     document.getElementById("studentModalTitle").textContent = "Add Student";
+    document.getElementById("srCodeWrap").style.display = "none";
+    document.getElementById("newStudentIdNotice").style.display = "block";
+    updateStudentTypeFields();
   }
+}
+
+// Generates a human-readable SR Code (e.g. "SR-25-00001") instead of making
+// the admin type one. Sequenced within the given academic year, with a
+// uniqueness retry loop as a cheap safety net against races.
+async function generateStudentId(academicYear) {
+  const yearMatch = (academicYear || "").match(/\d{4}/);
+  const prefix = yearMatch ? yearMatch[0].slice(2) : String(new Date().getFullYear()).slice(2);
+
+  const existingForYear = await db.collection("students").where("academicYear", "==", academicYear).get();
+  let seq = existingForYear.size + 1;
+
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const candidate = `SR-${prefix}-${String(seq).padStart(5, "0")}`;
+    const doc = await db.collection("students").doc(candidate).get();
+    if (!doc.exists) return candidate;
+    seq++;
+  }
+  // Extremely unlikely fallback if 20 sequential candidates all collided.
+  return `SR-${prefix}-${Date.now().toString().slice(-6)}`;
+}
+
+// Initial login password is the student's Last Name. Firebase requires at
+// least 6 characters, so short last names are padded deterministically.
+function generateInitialPassword(lastName) {
+  const base = (lastName || "").replace(/\s+/g, "");
+  if (base.length >= 6) return base;
+  return (base + "000000").slice(0, 6);
 }
 
 // Creates the student's login account without disturbing the Admin's own
@@ -308,13 +400,14 @@ async function saveStudent(e) {
   if (!validateForm(form)) return;
 
   const editingId = document.getElementById("studentDocId").value;
-  const studentId = document.getElementById("studentId").value.trim();
   const btn = document.getElementById("student-save-btn");
   btn.disabled = true;
 
   try {
     const firstName = document.getElementById("firstName").value.trim();
     const lastName = document.getElementById("lastName").value.trim();
+    const studentType = document.getElementById("studentType").value;
+    const needsLastYear = ["Returnee", "Transferee", "Failed"].includes(studentType);
     const data = {
       firstName,
       lastName,
@@ -325,7 +418,10 @@ async function saveStudent(e) {
       curriculum: document.getElementById("curriculum").value,
       track: document.getElementById("track").value,
       yearLevel: document.getElementById("yearLevel").value,
-      studentType: document.getElementById("studentType").value,
+      studentType,
+      academicYear: document.getElementById("academicYear").value.trim(),
+      lastSchoolYearAttended: needsLastYear ? document.getElementById("lastSchoolYearAttended").value.trim() : "",
+      previousSchool: studentType === "Transferee" ? document.getElementById("previousSchool").value.trim() : "",
       updatedAt: serverTimestamp()
     };
 
@@ -341,11 +437,12 @@ async function saveStudent(e) {
         showToast("Student updated.");
       }
     } else {
-      const existing = await db.collection("students").doc(studentId).get();
-      if (existing.exists) throw new Error("A student with this Student ID already exists.");
+      // SR Code is generated by the system - the admin never types one.
+      const studentId = await generateStudentId(data.academicYear);
+      const initialPassword = generateInitialPassword(lastName);
 
-      // Create the student's login account up front (email + Student ID as password).
-      const uid = await createStudentAuthAccount(data.email, studentId);
+      // Create the student's login account up front (email + Last Name as password).
+      const uid = await createStudentAuthAccount(data.email, initialPassword);
 
       data.status = "Pending";
       data.createdAt = serverTimestamp();
@@ -361,14 +458,13 @@ async function saveStudent(e) {
       });
 
       await logActivity(`Added student ${studentId}`);
+      const passwordNote = `Their SR Code is ${studentId}. They log in with their email and their Last Name ("${initialPassword}") as the password.`;
       if (data.studentType === "Regular") {
         const n = await autoCreditLowerYears(studentId, data);
         await recomputeCreditStatus(studentId);
-        showToast(
-          `Student added${n ? ` and auto-credited ${n} lower-year subject(s)` : ""}. They log in with their email and Student ID as the password.`
-        );
+        showToast(`Student added${n ? ` and auto-credited ${n} lower-year subject(s)` : ""}. ${passwordNote}`);
       } else {
-        showToast("Student added. They can log in with their email and Student ID as the password.");
+        showToast(`Student added. ${passwordNote}`);
       }
     }
 
@@ -385,7 +481,7 @@ function viewStudent(id) {
   const s = allStudents.find((x) => x.id === id);
   document.getElementById("viewStudentBody").innerHTML = `
     <dl class="row mb-0">
-      <dt class="col-5">Student ID</dt><dd class="col-7">${escapeHtml(s.id)}</dd>
+      <dt class="col-5">SR Code</dt><dd class="col-7">${escapeHtml(s.id)}</dd>
       <dt class="col-5">First Name</dt><dd class="col-7">${escapeHtml(s.firstName)}</dd>
       <dt class="col-5">Last Name</dt><dd class="col-7">${escapeHtml(s.lastName)}</dd>
       <dt class="col-5">Email</dt><dd class="col-7">${escapeHtml(s.email)}</dd>
@@ -395,6 +491,9 @@ function viewStudent(id) {
       <dt class="col-5">Track</dt><dd class="col-7">${escapeOrDash(s.track)}</dd>
       <dt class="col-5">Year Level</dt><dd class="col-7">${escapeHtml(s.yearLevel)}</dd>
       <dt class="col-5">Student Type</dt><dd class="col-7">${escapeOrDash(s.studentType)}</dd>
+      <dt class="col-5">Academic Year</dt><dd class="col-7">${escapeOrDash(s.academicYear)}</dd>
+      <dt class="col-5">Last School Year Attended</dt><dd class="col-7">${escapeOrDash(s.lastSchoolYearAttended)}</dd>
+      <dt class="col-5">Previous School</dt><dd class="col-7">${escapeOrDash(s.previousSchool)}</dd>
       <dt class="col-5">Status</dt><dd class="col-7">${statusBadge(s.status || "Pending")}</dd>
       <dt class="col-5">Created At</dt><dd class="col-7">${formatDateTime(s.createdAt)}</dd>
       <dt class="col-5">Updated At</dt><dd class="col-7">${formatDateTime(s.updatedAt)}</dd>

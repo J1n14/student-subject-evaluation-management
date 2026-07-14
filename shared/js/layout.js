@@ -84,5 +84,5 @@ function renderAdminLayout(active, profile) {
 }
 
 function renderStudentLayout(active, profile) {
-  return renderLayout(STUDENT_NAV, active, "Student Portal", profile, "../../index.html");
+  return renderLayout(STUDENT_NAV, active, "Student Portal", profile, "../../student-login.html");
 }

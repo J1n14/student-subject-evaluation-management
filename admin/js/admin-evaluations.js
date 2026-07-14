@@ -199,6 +199,62 @@ async function saveCreditedSubject(e) {
   }
 }
 
+// Bulk-credits every required subject the selected student hasn't been
+// credited for yet, in one batched write. Useful for quickly clearing an
+// old-curriculum carryover instead of clicking "Mark credited" one by one.
+// Each record still gets its own deterministic ID (studentId_subjectId), so
+// it's safe to run again later - already-credited subjects are skipped.
+async function markAllCredited() {
+  if (!creditTabState) return;
+  const { student, requiredSubjects, creditedMap } = creditTabState;
+  const remaining = requiredSubjects.filter((s) => !creditedMap.has(s.id));
+
+  if (remaining.length === 0) {
+    showToast("Nothing left to credit for this student.", "info");
+    return;
+  }
+
+  if (!confirm(`Mark all ${remaining.length} remaining subject(s) as credited for ${student.fullName}? This can be undone individually afterward if needed.`)) {
+    return;
+  }
+
+  const rawInput = prompt('"Credited From" note to apply to all of them (e.g. old school / bulk carryover):', "Bulk credited by admin");
+  if (rawInput === null) return; // admin cancelled
+  const creditedFrom = rawInput.trim();
+
+  try {
+    const batch = db.batch();
+    remaining.forEach((sub) => {
+      const ref = db.collection("creditedSubjects").doc(`${student.id}_${sub.id}`);
+      batch.set(
+        ref,
+        {
+          studentId: student.id,
+          subjectId: sub.id,
+          creditedFrom: creditedFrom || "Bulk credited by admin",
+          remarks: "Marked via Mark All Credited",
+          creditedBy: auth.currentUser.email,
+          creditedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+    });
+    await batch.commit();
+
+    await logActivity(`Bulk-credited ${remaining.length} subject(s) for student ${student.id}`);
+    const newStatus = await recomputeCreditStatus(student.id);
+    showToast(`Marked ${remaining.length} subject(s) as credited. Student status: ${newStatus}.`);
+
+    const idx = evalStudents.findIndex((s) => s.id === student.id);
+    if (idx > -1) evalStudents[idx].status = newStatus;
+    renderEvalStudentList();
+
+    await selectStudentForCreditEvaluation(student.id);
+  } catch (err) {
+    showError(err, "Failed to bulk-credit subjects.");
+  }
+}
+
 async function deleteCreditedSubject(creditId, studentId) {
   if (!confirm("Remove this credited subject?")) return;
   try {

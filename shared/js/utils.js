@@ -132,15 +132,16 @@ const YEAR_ORDER = ["1st Year", "2nd Year", "3rd Year", "4th Year"];
 
 // A subject counts toward a student's plan if it's Active, its curriculum
 // matches the student's (missing curriculum on legacy subjects is treated
-// as "New"), and its track matches the student's track, is "All Tracks", or
-// is unset (legacy subjects created before the Track field existed apply to
-// every track).
+// as "New"), and its track matches the student's track, is "General"
+// (applies to every track - "All Tracks" is the pre-rename legacy value for
+// the same thing), or is unset (legacy subjects created before the Track
+// field existed apply to every track).
 function getRequiredSubjects(student, allSubjectsArr) {
   const studentCurriculum = student.curriculum || "New";
   return allSubjectsArr.filter((s) => {
     const subjCurriculum = s.curriculum || "New";
     const matchesCurriculum = subjCurriculum === studentCurriculum;
-    const matchesTrack = !s.track || s.track === student.track || s.track === "All Tracks";
+    const matchesTrack = !s.track || s.track === student.track || s.track === "General" || s.track === "All Tracks";
     const isActive = (s.status || "Active") === "Active";
     return matchesCurriculum && matchesTrack && isActive;
   });
