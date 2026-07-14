@@ -2,6 +2,7 @@ let assignStudents = [];
 let assignSubjects = []; // full subject catalog (needed for curriculum/track matching + prereq lookup)
 let currentAssignments = []; // studentSubjects docs for the selected student
 let currentCreditedMap = new Map(); // subjectId -> credited record for the selected student
+let currentAssignStudent = null; // the currently selected student (used by the Transfer Credit modal)
 
 const SEMESTER_ORDER = ["1st Semester", "2nd Semester", "Midterm", "Summer"];
 
@@ -83,6 +84,7 @@ function renderStudentList() {
 
 async function selectStudentForAssignment(studentId) {
   const student = assignStudents.find((s) => s.id === studentId);
+  currentAssignStudent = student;
   const panel = document.getElementById("assignment-panel");
   panel.innerHTML = `<div class="text-muted small">Loading...</div>`;
 
@@ -163,8 +165,48 @@ async function selectStudentForAssignment(studentId) {
       <div class="d-flex gap-2 flex-wrap">
         <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Save Assignment</button>
         <button type="button" class="btn btn-outline-success" id="assign-all-btn"><i class="bi bi-check2-all me-1"></i>Assign all still-to-take</button>
+        <button type="button" class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#transferCreditModal" onclick="openTransferCreditModal()">
+          <i class="bi bi-award me-1"></i>Add Transfer Credit
+        </button>
       </div>
     </form>
+
+    <div class="modal fade" id="transferCreditModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Add Transfer Credit</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <form id="transfer-credit-form" class="needs-validation" novalidate>
+            <div class="modal-body">
+              <p class="text-muted small">For a transferee: manually credit a subject already completed at their previous school, so it's marked done instead of needing to be taken here.</p>
+              <div class="mb-3">
+                <label class="form-label">Subject</label>
+                <select class="form-select" id="transferCreditSubjectId" required>
+                  <option value="">Select subject</option>
+                </select>
+                <div class="invalid-feedback">Select a subject.</div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Credited From (previous school course)</label>
+                <input type="text" class="form-control" id="transferCreditedFrom" placeholder="e.g. GE 1102 - Mathematics in the Modern World" required />
+                <div class="invalid-feedback">Required.</div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Remarks</label>
+                <input type="text" class="form-control" id="transferCreditRemarks" placeholder="Optional" />
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button type="submit" class="btn btn-primary" id="transfer-credit-save-btn">Save</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
     <hr/>
     <h6 class="mt-3">Currently Assigned</h6>
     <div id="current-assignments-list">${renderCurrentAssignmentsList(assignedIds)}</div>`;
@@ -174,8 +216,67 @@ async function selectStudentForAssignment(studentId) {
   document.getElementById("subject-picker-year").addEventListener("change", filterSubjectPicker);
   document.getElementById("subject-picker-semester").addEventListener("change", filterSubjectPicker);
   document.getElementById("assign-all-btn").addEventListener("click", selectAllStillToTake);
+  document.getElementById("transfer-credit-form").addEventListener("submit", saveTransferCredit);
 
   filterSubjectPicker(); // apply the default (current-year) filter immediately
+}
+
+// Populates the Transfer Credit modal's subject dropdown with the student's
+// required-plan subjects that aren't already credited.
+function openTransferCreditModal() {
+  const form = document.getElementById("transfer-credit-form");
+  form.classList.remove("was-validated");
+  form.reset();
+
+  const requiredSubjects = getRequiredSubjects(currentAssignStudent, assignSubjects);
+  const eligible = requiredSubjects.filter((s) => !currentCreditedMap.has(s.id));
+
+  const select = document.getElementById("transferCreditSubjectId");
+  select.innerHTML = eligible.length
+    ? `<option value="">Select subject</option>` +
+      eligible.map((s) => `<option value="${s.id}">${escapeHtml(s.subjectCode)} - ${escapeHtml(s.subjectName)}</option>`).join("")
+    : `<option value="" disabled selected>No eligible subjects - everything required is already credited</option>`;
+}
+
+async function saveTransferCredit(e) {
+  e.preventDefault();
+  const form = e.target;
+  if (!validateForm(form)) return;
+
+  const studentId = currentAssignStudent.id;
+  const subjectId = document.getElementById("transferCreditSubjectId").value;
+  const btn = document.getElementById("transfer-credit-save-btn");
+  btn.disabled = true;
+
+  try {
+    const docId = `${studentId}_${subjectId}`;
+    await db.collection("creditedSubjects").doc(docId).set(
+      {
+        studentId,
+        subjectId,
+        creditedFrom: document.getElementById("transferCreditedFrom").value.trim(),
+        remarks: document.getElementById("transferCreditRemarks").value.trim(),
+        creditedBy: auth.currentUser.email,
+        creditedAt: serverTimestamp()
+      },
+      { merge: true }
+    );
+
+    await logActivity(`Saved transfer credit for student ${studentId}`);
+    const newStatus = await recomputeCreditStatus(studentId);
+    showToast(`Transfer credit saved. Student status: ${newStatus}.`);
+
+    const idx = assignStudents.findIndex((s) => s.id === studentId);
+    if (idx > -1) assignStudents[idx].status = newStatus;
+    renderStudentList();
+
+    bootstrap.Modal.getInstance(document.getElementById("transferCreditModal")).hide();
+    await selectStudentForAssignment(studentId);
+  } catch (err) {
+    showError(err, "Failed to save transfer credit.");
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // Ticks every "still to take" subject currently visible in the picker
