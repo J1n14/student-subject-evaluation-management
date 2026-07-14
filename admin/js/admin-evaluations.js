@@ -9,7 +9,7 @@ async function initAdminEvaluations(content) {
       <div class="col-lg-4">
         <div class="section-card">
           <h6 class="mb-3"><i class="bi bi-person-check me-1"></i>Select Student</h6>
-          <input type="text" class="form-control mb-2" placeholder="Search student..." id="eval-student-search" />
+          <input type="text" class="form-control mb-2" placeholder="Search by name or email..." id="eval-student-search" />
           <div class="list-group" id="eval-student-list" style="max-height:520px; overflow-y:auto;"></div>
         </div>
       </div>
@@ -72,7 +72,7 @@ async function initAdminEvaluations(content) {
 function renderEvalStudentList() {
   const search = document.getElementById("eval-student-search").value.toLowerCase();
   const filtered = evalStudents.filter(
-    (s) => !search || s.fullName.toLowerCase().includes(search) || s.id.toLowerCase().includes(search)
+    (s) => !search || s.fullName.toLowerCase().includes(search) || (s.email || "").toLowerCase().includes(search)
   );
   document.getElementById("eval-student-list").innerHTML = filtered
     .map(
@@ -81,7 +81,7 @@ function renderEvalStudentList() {
           <span>${escapeHtml(s.fullName)}</span>
           ${statusBadge(s.status || "Pending")}
         </div>
-        <div class="small text-muted">${escapeHtml(s.id)} &middot; ${escapeHtml(s.track)}</div>
+        <div class="small text-muted">${escapeHtml(s.email)} &middot; ${escapeOrDash(s.track)}</div>
       </button>`
     )
     .join("") || `<div class="text-muted small p-2">No students found.</div>`;

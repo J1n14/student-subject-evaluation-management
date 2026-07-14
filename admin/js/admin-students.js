@@ -7,7 +7,7 @@ async function initAdminStudents(content) {
     <div class="section-card">
       <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
         <div class="d-flex gap-2 flex-wrap">
-          <input type="text" class="form-control" style="width:220px" placeholder="Search name, SR Code, or email" id="search-input" />
+          <input type="text" class="form-control" style="width:220px" placeholder="Search by name or email" id="search-input" />
           <select class="form-select" style="width:190px" id="filter-track">
             <option value="">All Tracks</option>
             <option>Network Technology</option>
@@ -28,7 +28,7 @@ async function initAdminStudents(content) {
       <div class="table-responsive">
         <table class="table table-hover align-middle">
           <thead>
-            <tr><th>SR Code</th><th>Full Name</th><th>Email</th><th>Source College</th><th>Course</th><th>Curriculum</th><th>Track</th><th>Year</th><th>Type</th><th>Status</th><th class="text-end">Actions</th></tr>
+            <tr><th>Full Name</th><th>Email</th><th>Source College</th><th>Course</th><th>Curriculum</th><th>Track</th><th>Year</th><th>Type</th><th>Status</th><th class="text-end sticky-col-end">Actions</th></tr>
           </thead>
           <tbody id="students-tbody"></tbody>
         </table>
@@ -50,14 +50,24 @@ async function initAdminStudents(content) {
           <form id="student-form" class="needs-validation" novalidate>
             <div class="modal-body">
               <input type="hidden" id="studentDocId" />
-              <div class="mb-3" id="srCodeWrap" style="display:none">
-                <label class="form-label">SR Code</label>
-                <input type="text" class="form-control" id="studentId" disabled />
-                <div class="form-text">System-generated student record code.</div>
-              </div>
               <div class="alert alert-light border small mb-3" id="newStudentIdNotice">
-                <i class="bi bi-info-circle me-1"></i>An SR Code will be generated automatically when you save. The student's
-                initial login password will be their <strong>Last Name</strong> (padded if shorter than 6 characters).
+                <i class="bi bi-info-circle me-1"></i>The student's initial login password will be their
+                <strong>Last Name</strong> (padded if shorter than 6 characters).
+              </div>
+              <div class="mb-3 p-3 border rounded" style="background:var(--bg-soft)">
+                <label class="form-label fw-semibold">
+                  <span class="badge bg-primary rounded-pill me-1">1</span>Student Type
+                </label>
+                <select class="form-select" id="studentType" required>
+                  <option value="">Select the student type first...</option>
+                  <option>Regular</option>
+                  <option>Irregular</option>
+                  <option>Returnee</option>
+                  <option>Transferee</option>
+                  <option>Failed</option>
+                </select>
+                <div class="form-text" id="studentTypeHelp">Choose a type to see what it means for this student's subjects.</div>
+                <div class="invalid-feedback">Select a student type.</div>
               </div>
               <div class="row">
                 <div class="col-6 mb-3">
@@ -99,14 +109,13 @@ async function initAdminStudents(content) {
                   <div class="invalid-feedback">Select a curriculum.</div>
                 </div>
                 <div class="col-6 mb-3">
-                  <label class="form-label">Track</label>
-                  <select class="form-select" id="track" required>
-                    <option value="">Select</option>
+                  <label class="form-label">Track <span class="text-muted fw-normal">(optional)</span></label>
+                  <select class="form-select" id="track">
+                    <option value="">None / not applicable</option>
                     <option>Network Technology</option>
                     <option>Service Management</option>
                     <option>Business Analytics</option>
                   </select>
-                  <div class="invalid-feedback">Select a track.</div>
                 </div>
               </div>
               <div class="row">
@@ -119,35 +128,25 @@ async function initAdminStudents(content) {
                   <div class="invalid-feedback">Select a year level.</div>
                 </div>
                 <div class="col-6 mb-3">
-                  <label class="form-label">Student Type</label>
-                  <select class="form-select" id="studentType" required>
-                    <option value="">Select</option>
-                    <option>Regular</option>
-                    <option>Irregular</option>
-                    <option>Returnee</option>
-                    <option>Transferee</option>
-                    <option>Failed</option>
-                  </select>
-                  <div class="form-text" id="studentTypeHelp">Regular auto-credits all lower-year subjects.</div>
-                  <div class="invalid-feedback">Select a student type.</div>
-                </div>
-              </div>
-              <div class="row">
-                <div class="col-6 mb-3">
                   <label class="form-label">Academic Year</label>
                   <input type="text" class="form-control" id="academicYear" placeholder="e.g. 2025-2026" required />
                   <div class="invalid-feedback">Academic year is required.</div>
                 </div>
+              </div>
+              <div class="row">
                 <div class="col-6 mb-3" id="lastSchoolYearWrap" style="display:none">
                   <label class="form-label">Last School Year Attended</label>
                   <input type="text" class="form-control" id="lastSchoolYearAttended" placeholder="e.g. 2023-2024" />
                   <div class="invalid-feedback">Required for this student type.</div>
                 </div>
+                <div class="col-6 mb-3" id="previousSchoolWrap" style="display:none">
+                  <label class="form-label">Previous School</label>
+                  <input type="text" class="form-control" id="previousSchool" placeholder="School the student transferred from" />
+                  <div class="invalid-feedback">Required for transferees.</div>
+                </div>
               </div>
-              <div class="mb-3" id="previousSchoolWrap" style="display:none">
-                <label class="form-label">Previous School</label>
-                <input type="text" class="form-control" id="previousSchool" placeholder="School the student transferred from" />
-                <div class="invalid-feedback">Required for transferees.</div>
+              <div class="alert alert-light border small" id="studentTypeAssignNote" style="display:none">
+                <i class="bi bi-signpost-split me-1"></i><span id="studentTypeAssignNoteText"></span>
               </div>
               <div class="mb-3" id="statusFieldWrap" style="display:none">
                 <label class="form-label">Status</label>
@@ -216,6 +215,24 @@ function updateStudentTypeFields() {
       : needsLastYear
       ? "Record the last school year they attended below."
       : "";
+
+  // Explains what this Student Type means for subject assignment, so the
+  // admin knows what to expect before heading to the Assign Subjects page.
+  const noteWrap = document.getElementById("studentTypeAssignNote");
+  const noteText = document.getElementById("studentTypeAssignNoteText");
+  const notes = {
+    Regular: "Regular: subjects up to the selected Year Level are auto-credited as already taken. Assign only the current year's subjects on the Assign Subjects page.",
+    Irregular: "Irregular: no subjects are auto-credited. On the Assign Subjects page, assign whichever subjects (any year) this student still needs, respecting prerequisites.",
+    Returnee: "Returnee: no subjects are auto-credited. On the Assign Subjects page, assign only the subjects this student hasn't already taken, watching for unmet prerequisites.",
+    Transferee: "Transferee: no subjects are auto-credited. On the Assign Subjects page, assign the subjects not covered at their previous school, watching for unmet prerequisites.",
+    Failed: "Failed: no subjects are auto-credited. On the Assign Subjects page, re-assign the subject(s) not passed plus anything still outstanding."
+  };
+  if (type && notes[type]) {
+    noteText.textContent = notes[type];
+    noteWrap.style.display = "block";
+  } else {
+    noteWrap.style.display = "none";
+  }
 }
 
 async function loadStudents() {
@@ -233,7 +250,6 @@ function renderStudentsTable() {
     const matchesSearch =
       !search ||
       (s.fullName || "").toLowerCase().includes(search) ||
-      (s.id || "").toLowerCase().includes(search) ||
       (s.email || "").toLowerCase().includes(search);
     const matchesTrack = !trackFilter || s.track === trackFilter;
     const matchesStatus = !statusFilter || s.status === statusFilter;
@@ -247,7 +263,6 @@ function renderStudentsTable() {
         .map(
           (s) => `
     <tr>
-      <td>${escapeHtml(s.id)}</td>
       <td>${escapeHtml(s.fullName)}</td>
       <td>${escapeHtml(s.email)}</td>
       <td>${escapeOrDash(s.college)}</td>
@@ -257,15 +272,17 @@ function renderStudentsTable() {
       <td>${escapeHtml(s.yearLevel)}</td>
       <td>${escapeOrDash(s.studentType)}</td>
       <td>${statusBadge(s.status || "Pending")}</td>
-      <td class="text-end">
-        <button class="btn btn-sm btn-outline-secondary" onclick="viewStudent('${s.id}')"><i class="bi bi-eye"></i></button>
-        <button class="btn btn-sm btn-outline-primary" onclick="openStudentModal('${s.id}')" data-bs-toggle="modal" data-bs-target="#studentModal"><i class="bi bi-pencil"></i></button>
-        <button class="btn btn-sm btn-outline-danger" onclick="deleteStudent('${s.id}')"><i class="bi bi-trash"></i></button>
+      <td class="text-end sticky-col-end">
+        <div class="d-flex gap-1 justify-content-end flex-nowrap">
+          <button class="btn btn-sm btn-outline-secondary" title="View details" onclick="viewStudent('${s.id}')"><i class="bi bi-eye"></i></button>
+          <button class="btn btn-sm btn-primary" title="Edit student" onclick="openStudentModal('${s.id}')" data-bs-toggle="modal" data-bs-target="#studentModal"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-sm btn-outline-danger" title="Delete student" onclick="deleteStudent('${s.id}')"><i class="bi bi-trash"></i></button>
+        </div>
       </td>
     </tr>`
         )
         .join("")
-    : `<tr><td colspan="11" class="text-center text-muted py-4">No students found.</td></tr>`;
+    : `<tr><td colspan="10" class="text-center text-muted py-4">No students found.</td></tr>`;
 
   document.getElementById("students-count").textContent = `${total} student(s)`;
   renderPagination(document.getElementById("students-pagination"), studentsPage, totalPages, (p) => {
@@ -286,11 +303,8 @@ function openStudentModal(id) {
     document.getElementById("studentModalTitle").textContent = "Edit Student";
     document.getElementById("studentDocId").value = id;
 
-    // Existing student: show their generated SR Code (read-only) and hide
-    // the "will be generated" notice; editing never touches the password.
-    document.getElementById("srCodeWrap").style.display = "block";
+    // Editing an existing student never touches their password.
     document.getElementById("newStudentIdNotice").style.display = "none";
-    document.getElementById("studentId").value = s.id;
 
     const [fallbackFirst, ...fallbackRest] = (s.fullName || "").split(" ");
     document.getElementById("firstName").value = s.firstName || fallbackFirst || "";
@@ -310,30 +324,9 @@ function openStudentModal(id) {
     updateStudentTypeFields();
   } else {
     document.getElementById("studentModalTitle").textContent = "Add Student";
-    document.getElementById("srCodeWrap").style.display = "none";
     document.getElementById("newStudentIdNotice").style.display = "block";
     updateStudentTypeFields();
   }
-}
-
-// Generates a human-readable SR Code (e.g. "SR-25-00001") instead of making
-// the admin type one. Sequenced within the given academic year, with a
-// uniqueness retry loop as a cheap safety net against races.
-async function generateStudentId(academicYear) {
-  const yearMatch = (academicYear || "").match(/\d{4}/);
-  const prefix = yearMatch ? yearMatch[0].slice(2) : String(new Date().getFullYear()).slice(2);
-
-  const existingForYear = await db.collection("students").where("academicYear", "==", academicYear).get();
-  let seq = existingForYear.size + 1;
-
-  for (let attempt = 0; attempt < 20; attempt++) {
-    const candidate = `SR-${prefix}-${String(seq).padStart(5, "0")}`;
-    const doc = await db.collection("students").doc(candidate).get();
-    if (!doc.exists) return candidate;
-    seq++;
-  }
-  // Extremely unlikely fallback if 20 sequential candidates all collided.
-  return `SR-${prefix}-${Date.now().toString().slice(-6)}`;
 }
 
 // Initial login password is the student's Last Name. Firebase requires at
@@ -437,8 +430,6 @@ async function saveStudent(e) {
         showToast("Student updated.");
       }
     } else {
-      // SR Code is generated by the system - the admin never types one.
-      const studentId = await generateStudentId(data.academicYear);
       const initialPassword = generateInitialPassword(lastName);
 
       // Create the student's login account up front (email + Last Name as password).
@@ -447,7 +438,10 @@ async function saveStudent(e) {
       data.status = "Pending";
       data.createdAt = serverTimestamp();
       data.uid = uid;
-      await db.collection("students").doc(studentId).set(data);
+      // Students are simply enrolled - no record code is assigned. Firestore
+      // generates the document's internal ID; nothing user-facing depends on it.
+      const studentRef = await db.collection("students").add(data);
+      const studentId = studentRef.id;
       await db.collection("users").doc(uid).set({
         role: "student",
         email: data.email,
@@ -457,8 +451,8 @@ async function saveStudent(e) {
         updatedAt: serverTimestamp()
       });
 
-      await logActivity(`Added student ${studentId}`);
-      const passwordNote = `Their SR Code is ${studentId}. They log in with their email and their Last Name ("${initialPassword}") as the password.`;
+      await logActivity(`Added student ${data.fullName}`);
+      const passwordNote = `They log in with their email and their Last Name ("${initialPassword}") as the password.`;
       if (data.studentType === "Regular") {
         const n = await autoCreditLowerYears(studentId, data);
         await recomputeCreditStatus(studentId);
@@ -481,7 +475,6 @@ function viewStudent(id) {
   const s = allStudents.find((x) => x.id === id);
   document.getElementById("viewStudentBody").innerHTML = `
     <dl class="row mb-0">
-      <dt class="col-5">SR Code</dt><dd class="col-7">${escapeHtml(s.id)}</dd>
       <dt class="col-5">First Name</dt><dd class="col-7">${escapeHtml(s.firstName)}</dd>
       <dt class="col-5">Last Name</dt><dd class="col-7">${escapeHtml(s.lastName)}</dd>
       <dt class="col-5">Email</dt><dd class="col-7">${escapeHtml(s.email)}</dd>
@@ -502,9 +495,10 @@ function viewStudent(id) {
 }
 
 async function deleteStudent(id) {
-  if (!confirm(`Delete student ${id}? This also removes their subject assignments and credited subjects.`)) return;
+  const student = allStudents.find((s) => s.id === id);
+  const name = student ? student.fullName : "this student";
+  if (!confirm(`Delete ${name}? This also removes their subject assignments and credited subjects.`)) return;
   try {
-    const student = allStudents.find((s) => s.id === id);
     const batch = db.batch();
     batch.delete(db.collection("students").doc(id));
     if (student && student.uid) {
@@ -519,7 +513,7 @@ async function deleteStudent(id) {
     creditSnap.forEach((d) => batch.delete(d.ref));
 
     await batch.commit();
-    await logActivity(`Deleted student ${id}`);
+    await logActivity(`Deleted student ${name}`);
     showToast("Student deleted.");
     await loadStudents();
   } catch (err) {

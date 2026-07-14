@@ -2,11 +2,15 @@ let assignStudents = [];
 let assignSubjects = []; // full subject catalog (needed for curriculum/track matching + prereq lookup)
 let currentAssignments = []; // studentSubjects docs for the selected student
 let currentCreditedMap = new Map(); // subjectId -> credited record for the selected student
+let selectedAssignmentStudentId = null;
 
 // Admin-configurable unit load policy, stored at settings/unitPolicy.
 // Falls back to these defaults until an admin saves their own values.
 let unitPolicy = { minUnits: 15, maxUnits: 24 };
 
+// Fetches the saved unit policy into the in-memory `unitPolicy` var. Purely
+// a data load - no DOM involved, so it's safe to call before the assignment
+// panel (where the compact policy control lives) has been rendered.
 async function loadUnitPolicy() {
   try {
     const doc = await db.collection("settings").doc("unitPolicy").get();
@@ -18,14 +22,24 @@ async function loadUnitPolicy() {
   } catch (err) {
     console.warn("Could not load unit policy, using defaults.", err);
   }
-  const minInput = document.getElementById("policy-min-units");
-  const maxInput = document.getElementById("policy-max-units");
-  if (minInput) minInput.value = unitPolicy.minUnits;
-  if (maxInput) maxInput.value = unitPolicy.maxUnits;
 }
 
-async function saveUnitPolicy(e) {
-  e.preventDefault();
+// Toggles the small inline min/max editor shown next to the running unit
+// total (see selectStudentForAssignment). No standalone settings card -
+// the policy only matters in the context of assigning a specific student's
+// subjects, so it lives right next to that running total.
+function toggleUnitPolicyEditor(show) {
+  const row = document.getElementById("unit-policy-edit-row");
+  if (!row) return;
+  row.classList.toggle("d-none", !show);
+  row.classList.toggle("d-flex", show);
+  if (show) {
+    document.getElementById("policy-min-units").value = unitPolicy.minUnits;
+    document.getElementById("policy-max-units").value = unitPolicy.maxUnits;
+  }
+}
+
+async function saveUnitPolicyInline() {
   const minUnits = Number(document.getElementById("policy-min-units").value);
   const maxUnits = Number(document.getElementById("policy-max-units").value);
   if (!minUnits || !maxUnits || minUnits > maxUnits) {
@@ -38,6 +52,9 @@ async function saveUnitPolicy(e) {
       { merge: true }
     );
     unitPolicy = { minUnits, maxUnits };
+    const display = document.getElementById("unit-policy-display");
+    if (display) display.textContent = `Policy: ${minUnits}–${maxUnits} units`;
+    toggleUnitPolicyEditor(false);
     showToast("Unit load policy saved.");
     updateSelectedUnitsTotal();
   } catch (err) {
@@ -73,46 +90,27 @@ function unmetPrerequisites(subject, creditedMap) {
 async function initAdminAssignments(content) {
   content.innerHTML = `
     <div class="section-card mb-3">
-      <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
-        <div>
-          <h6 class="mb-1"><i class="bi bi-sliders me-1"></i>Unit Load Policy</h6>
-          <div class="text-muted small">Used to flag overload/underload when saving a subject assignment.</div>
-        </div>
-        <form id="unit-policy-form" class="d-flex align-items-end gap-2">
-          <div>
-            <label class="form-label small mb-1">Min units</label>
-            <input type="number" min="1" class="form-control form-control-sm" id="policy-min-units" style="width:90px" />
-          </div>
-          <div>
-            <label class="form-label small mb-1">Max units</label>
-            <input type="number" min="1" class="form-control form-control-sm" id="policy-max-units" style="width:90px" />
-          </div>
-          <button type="submit" class="btn btn-sm btn-primary">Save Policy</button>
-        </form>
+      <label class="form-label fw-semibold mb-2"><span class="badge bg-primary rounded-pill me-1">1</span>Select Student</label>
+      <div class="position-relative">
+        <input type="text" class="form-control" id="student-search" placeholder="Search by name or email..." autocomplete="off" />
+        <div class="list-group position-absolute w-100 mt-1" id="student-search-results" style="display:none;"></div>
       </div>
+      <div id="selected-student-chip" class="mt-2"></div>
     </div>
-    <div class="row g-3">
-      <div class="col-lg-4">
-        <div class="section-card">
-          <h6 class="mb-3"><i class="bi bi-person-check me-1"></i>Select Student</h6>
-          <input type="text" class="form-control mb-2" placeholder="Search by name or SR Code..." id="student-search" />
-          <div class="list-group" id="student-list" style="max-height:520px; overflow-y:auto;"></div>
-        </div>
-      </div>
-      <div class="col-lg-8">
-        <div class="section-card">
-          <div id="assignment-panel">
-            <div class="text-muted text-center py-5">
-              <i class="bi bi-arrow-left-circle" style="font-size:2rem;"></i>
-              <p class="mt-2">Select a student to manage subject assignments.</p>
-            </div>
-          </div>
-        </div>
-      </div>
+
+    <div class="section-card" id="assignment-section" style="display:none">
+      <label class="form-label fw-semibold mb-2"><span class="badge bg-primary rounded-pill me-1">2</span>Assign Subjects</label>
+      <div id="assignment-panel"></div>
     </div>`;
 
-  document.getElementById("student-search").addEventListener("input", debounce(renderStudentList, 200));
-  document.getElementById("unit-policy-form").addEventListener("submit", saveUnitPolicy);
+  document.getElementById("student-search").addEventListener("input", debounce(renderStudentSearchResults, 150));
+  document.getElementById("student-search").addEventListener("focus", renderStudentSearchResults);
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#student-search") && !e.target.closest("#student-search-results")) {
+      const results = document.getElementById("student-search-results");
+      if (results) results.style.display = "none";
+    }
+  });
 
   // Load the FULL subject catalog (not just the current year, and not just
   // "Active") so we can match by curriculum + track and resolve prerequisites.
@@ -123,25 +121,63 @@ async function initAdminAssignments(content) {
   assignStudents = studentsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
   assignSubjects = subjectsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
   await loadUnitPolicy();
-  renderStudentList();
 }
 
-function renderStudentList() {
-  const search = document.getElementById("student-search").value.toLowerCase();
-  const filtered = assignStudents.filter(
-    (s) => !search || s.fullName.toLowerCase().includes(search) || s.id.toLowerCase().includes(search)
-  );
-  document.getElementById("student-list").innerHTML = filtered
-    .map(
-      (s) => `<button type="button" class="list-group-item list-group-item-action" onclick="selectStudentForAssignment('${s.id}')">
+function renderStudentSearchResults() {
+  const input = document.getElementById("student-search");
+  const search = input.value.toLowerCase().trim();
+  const results = document.getElementById("student-search-results");
+
+  const matches = assignStudents
+    .filter((s) => !search || s.fullName.toLowerCase().includes(search) || (s.email || "").toLowerCase().includes(search))
+    .slice(0, 8);
+
+  results.innerHTML = matches.length
+    ? matches
+        .map(
+          (s) => `<button type="button" class="list-group-item list-group-item-action" onclick="pickStudentForAssignment('${s.id}')">
         <div class="d-flex justify-content-between">
           <span>${escapeHtml(s.fullName)}</span>
           ${statusBadge(s.status || "Pending")}
         </div>
-        <div class="small text-muted">${escapeHtml(s.id)} &middot; ${escapeHtml(s.track)}</div>
+        <div class="small text-muted">${escapeHtml(s.email)} &middot; ${escapeOrDash(s.track)}</div>
       </button>`
-    )
-    .join("") || `<div class="text-muted small p-2">No students found.</div>`;
+        )
+        .join("")
+    : `<div class="list-group-item text-muted small">No students found.</div>`;
+  results.style.display = "block";
+}
+
+function pickStudentForAssignment(studentId) {
+  selectedAssignmentStudentId = studentId;
+  document.getElementById("student-search-results").style.display = "none";
+  document.getElementById("student-search").value = "";
+
+  const s = assignStudents.find((x) => x.id === studentId);
+  document.getElementById("selected-student-chip").innerHTML = `
+    <div class="selected-student-chip">
+      <div>
+        <strong>${escapeHtml(s.fullName)}</strong>
+        <span class="text-muted small ms-2">${escapeHtml(s.email)}</span>
+        <span class="ms-2">${statusBadge(s.status || "Pending")}</span>
+      </div>
+      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearSelectedAssignmentStudent()">
+        <i class="bi bi-arrow-repeat me-1"></i>Change student
+      </button>
+    </div>`;
+
+  document.getElementById("assignment-section").style.display = "block";
+  selectStudentForAssignment(studentId);
+}
+
+function clearSelectedAssignmentStudent() {
+  selectedAssignmentStudentId = null;
+  document.getElementById("selected-student-chip").innerHTML = "";
+  document.getElementById("assignment-section").style.display = "none";
+  document.getElementById("assignment-panel").innerHTML = "";
+  const input = document.getElementById("student-search");
+  input.value = "";
+  input.focus();
 }
 
 async function selectStudentForAssignment(studentId) {
@@ -181,22 +217,22 @@ async function selectStudentForAssignment(studentId) {
 
   const emptyNotice =
     displaySubjects.length === 0
-      ? `<div class="alert alert-warning mb-3">No catalog subjects match this student's <strong>${escapeOrDash(student.curriculum)} curriculum</strong> / <strong>${escapeOrDash(student.track)} track</strong> yet. Add matching subjects in the Subjects panel first.</div>`
+      ? `<div class="alert alert-warning mb-3">No catalog subjects match this student's ${
+          student.curriculum ? `<strong>${escapeHtml(student.curriculum)} curriculum</strong>` : "curriculum"
+        }${student.track ? ` / <strong>${escapeHtml(student.track)} track</strong>` : ""} yet. Add matching subjects in the Subjects panel first.</div>`
       : "";
 
   panel.innerHTML = `
     <div class="d-flex justify-content-between align-items-start mb-3">
       <div>
         <h5 class="mb-0">${escapeHtml(student.fullName)}</h5>
-        <div class="text-muted small">${escapeHtml(student.id)} &middot; ${escapeOrDash(student.curriculum)} &middot; ${escapeHtml(student.track)} &middot; ${escapeHtml(student.yearLevel)}</div>
+        <div class="text-muted small">${escapeOrDash(student.curriculum)} &middot; ${escapeOrDash(student.track)} &middot; ${escapeHtml(student.yearLevel)}</div>
       </div>
-      ${statusBadge(student.status || "Pending")}
     </div>
 
     ${emptyNotice}
 
     <form id="assignment-form">
-      <label class="form-label">Assign subjects across the student's full curriculum plan</label>
       <div class="d-flex gap-2 mb-2 flex-wrap">
         <input type="text" class="form-control form-control-sm" style="max-width:220px" id="subject-picker-search" placeholder="Filter by code or name..." />
         <select class="form-select form-select-sm" style="max-width:150px" id="subject-picker-year">
@@ -208,26 +244,34 @@ async function selectStudentForAssignment(studentId) {
           ${semesters.map((sem) => `<option value="${escapeHtml(sem)}">${escapeHtml(sem)}</option>`).join("")}
         </select>
       </div>
+      <div class="d-flex flex-wrap align-items-center gap-3 small text-muted mb-3">
+        <span><span class="legend-dot" style="background:#2e9e6a"></span>Available to take</span>
+        <span><span class="legend-dot" style="background:#3a86c8"></span>Currently assigned</span>
+        <span><span class="legend-dot" style="background:#adb5bd"></span>Already credited</span>
+        <span><span class="legend-dot" style="background:#e2a53a"></span>Needs prerequisite first</span>
+      </div>
       <div class="text-muted small mb-2">
         Showing the current year by default. Choose <strong>All Years</strong> to assign back-year subjects a transferee or irregular student still needs.
       </div>
-      <div class="table-responsive border rounded mb-3" style="max-height:430px; overflow-y:auto;">
-        <table class="table table-sm table-hover align-middle mb-0" id="subject-picker-table">
-          <thead class="sticky-top bg-white"><tr><th></th><th>Year</th><th class="text-nowrap">Semester</th><th>Code</th><th>Subject Name</th><th>Units</th><th class="text-nowrap">Prerequisite</th><th>Status</th></tr></thead>
-          <tbody>
-            ${
-              displaySubjects.length
-                ? displaySubjects.map((sub) => renderPickerRow(sub, assignedIds, requiredIds)).join("")
-                : `<tr><td colspan="8" class="text-center text-muted py-3">No subjects to display.</td></tr>`
-            }
-          </tbody>
-        </table>
+      <div id="subject-picker-container" style="max-height:460px; overflow-y:auto;" class="border rounded p-2 mb-3">
+        ${displaySubjects.length ? renderSubjectBoxGrid(displaySubjects, assignedIds, requiredIds) : `<div class="text-center text-muted py-3">No subjects to display.</div>`}
       </div>
-      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-1">
         <div class="small">
           Selected units: <strong id="selected-units-total">0</strong>
           <span class="text-muted" id="unit-policy-hint"></span>
         </div>
+        <div class="small text-muted d-flex align-items-center gap-2">
+          <span id="unit-policy-display">Policy: ${unitPolicy.minUnits}–${unitPolicy.maxUnits} units</span>
+          <button type="button" class="btn btn-link btn-sm p-0" id="unit-policy-edit-toggle">Edit</button>
+        </div>
+      </div>
+      <div class="d-none align-items-center gap-2 mb-2" id="unit-policy-edit-row">
+        <input type="number" min="1" class="form-control form-control-sm" id="policy-min-units" style="width:80px" value="${unitPolicy.minUnits}" />
+        <span class="small text-muted">to</span>
+        <input type="number" min="1" class="form-control form-control-sm" id="policy-max-units" style="width:80px" value="${unitPolicy.maxUnits}" />
+        <button type="button" class="btn btn-sm btn-primary" id="unit-policy-save-btn">Save</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="unit-policy-cancel-btn">Cancel</button>
       </div>
       <div class="d-flex gap-2 flex-wrap">
         <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Save Assignment</button>
@@ -248,20 +292,113 @@ async function selectStudentForAssignment(studentId) {
     updateSelectedUnitsTotal();
   });
   document.getElementById("unselect-all-btn").addEventListener("click", unselectAll);
-  document.getElementById("subject-picker-table").addEventListener("change", (e) => {
+  document.getElementById("subject-picker-container").addEventListener("change", (e) => {
     if (e.target.matches('input[type="checkbox"]')) updateSelectedUnitsTotal();
   });
+  document.getElementById("unit-policy-edit-toggle").addEventListener("click", () => toggleUnitPolicyEditor(true));
+  document.getElementById("unit-policy-cancel-btn").addEventListener("click", () => toggleUnitPolicyEditor(false));
+  document.getElementById("unit-policy-save-btn").addEventListener("click", saveUnitPolicyInline);
 
-  await loadUnitPolicy();
   filterSubjectPicker(); // apply the default (current-year) filter immediately
   updateSelectedUnitsTotal();
+}
+
+// ---------- Box grid rendering (grouped by Year > Semester) ----------
+
+function renderSubjectBoxGrid(displaySubjects, assignedIds, requiredIds) {
+  const years = [...new Set(displaySubjects.map((s) => s.yearLevel))].sort(
+    (a, b) => YEAR_ORDER.indexOf(a) - YEAR_ORDER.indexOf(b)
+  );
+
+  return years
+    .map((year) => {
+      const yearSubs = displaySubjects.filter((s) => s.yearLevel === year);
+      const semBlocks = SEMESTER_ORDER.filter((sem) => yearSubs.some((s) => s.semester === sem))
+        .map((sem) => {
+          const rows = yearSubs.filter((s) => s.semester === sem).sort((a, b) => (a.subjectCode || "").localeCompare(b.subjectCode || ""));
+          return `
+        <div class="sem-group" data-sem-group>
+          <div class="sem-head">${escapeHtml(sem)}<span class="sem-count">${rows.length} subject(s)</span></div>
+          <div class="subj-box-grid">${rows.map((sub) => renderSubjectBox(sub, assignedIds, requiredIds)).join("")}</div>
+        </div>`;
+        })
+        .join("");
+      return `
+      <div class="year-block" data-year-block>
+        <div class="year-head"><span>${escapeHtml(year)}</span></div>
+        ${semBlocks}
+      </div>`;
+    })
+    .join("");
+}
+
+function renderSubjectBox(sub, assignedIds, requiredIds) {
+  const isCredited = currentCreditedMap.has(sub.id);
+  const isAssigned = assignedIds.has(sub.id);
+  const isOffPlan = !requiredIds.has(sub.id);
+  const missingPrereq = isCredited ? "" : unmetPrerequisites(sub, currentCreditedMap);
+
+  let stateClass = "box-available";
+  if (isCredited) stateClass = "box-credited";
+  else if (isOffPlan) stateClass = "box-offplan";
+  else if (missingPrereq) stateClass = "box-prereq";
+  else if (isAssigned) stateClass = "box-assigned";
+
+  const badges = [];
+  if (isCredited) badges.push(`<span class="badge bg-secondary">Credited</span>`);
+  if (isAssigned && !isCredited) badges.push(`<span class="badge bg-info text-dark">Assigned</span>`);
+  if (isOffPlan) badges.push(`<span class="badge bg-secondary">Off-plan</span>`);
+  if (missingPrereq)
+    badges.push(`<span class="badge bg-warning text-dark" title="Prerequisite not yet credited">Needs ${escapeHtml(missingPrereq)} first</span>`);
+
+  // Credited subjects are already completed - the checkbox is disabled but
+  // keeps its current assigned state (a disabled+checked box still submits as
+  // :checked, so nothing is accidentally removed on save).
+  return `
+    <label class="subj-box ${stateClass}" data-subject-row data-year="${escapeHtml(sub.yearLevel)}" data-semester="${escapeHtml(sub.semester)}" data-search="${escapeHtml((sub.subjectCode + " " + sub.subjectName).toLowerCase())}">
+      <div class="subj-box-top">
+        <input class="form-check-input mt-1 flex-shrink-0" type="checkbox" value="${sub.id}" ${isAssigned ? "checked" : ""} ${isCredited ? "disabled" : ""}>
+        <div class="min-w-0">
+          <span class="subj-box-code">${escapeHtml(sub.subjectCode)}</span>
+          <div class="subj-box-name">${escapeHtml(sub.subjectName)}</div>
+        </div>
+      </div>
+      <div class="subj-box-foot">
+        <span>${escapeHtml(sub.units)} unit(s)</span>
+        ${sub.prerequisite ? `<span title="Prerequisite: ${escapeHtml(sub.prerequisite)}"><i class="bi bi-link-45deg"></i> ${escapeHtml(sub.prerequisite)}</span>` : ""}
+      </div>
+      ${badges.length ? `<div class="subj-box-badges">${badges.join("")}</div>` : ""}
+    </label>`;
+}
+
+// Ticks every "still to take" subject currently visible in the picker
+// (not credited, not already assigned). Respects the active year/semester/
+// search filters, so you can bulk-select just 3rd-year, or clear the filters
+// and grab the student's entire remaining plan. Nothing is saved until the
+// admin reviews and clicks Save Assignment.
+function selectAllStillToTake() {
+  const boxes = document.querySelectorAll(
+    '#subject-picker-container [data-subject-row]:not(.d-none) input[type=checkbox]:not(:disabled)'
+  );
+  let count = 0;
+  boxes.forEach((b) => {
+    if (!b.checked) {
+      b.checked = true;
+      count++;
+    }
+  });
+  if (count === 0) {
+    showToast("Nothing new to assign in the current view.", "info");
+  } else {
+    showToast(`Selected ${count} subject(s). Click Save Assignment to confirm.`, "info");
+  }
 }
 
 // Unchecks every non-disabled (i.e. not-already-credited) checkbox currently
 // in the picker, regardless of the active year/semester/search filter, so a
 // full reset always works even if a filter is narrowing the view.
 function unselectAll() {
-  const boxes = document.querySelectorAll('#subject-picker-table input[type=checkbox]:not(:disabled)');
+  const boxes = document.querySelectorAll('#subject-picker-container input[type=checkbox]:not(:disabled)');
   let count = 0;
   boxes.forEach((b) => {
     if (b.checked) {
@@ -294,68 +431,27 @@ function updateSelectedUnitsTotal() {
   return total;
 }
 
-// Ticks every "still to take" subject currently visible in the picker
-// (not credited, not already assigned). Respects the active year/semester/
-// search filters, so you can bulk-select just 3rd-year, or clear the filters
-// and grab the student's entire remaining plan. Nothing is saved until the
-// admin reviews and clicks Save Assignment.
-function selectAllStillToTake() {
-  const boxes = document.querySelectorAll(
-    '#subject-picker-table tr[data-subject-row]:not(.d-none) input[type=checkbox]:not(:disabled)'
-  );
-  let count = 0;
-  boxes.forEach((b) => {
-    if (!b.checked) {
-      b.checked = true;
-      count++;
-    }
-  });
-  if (count === 0) {
-    showToast("Nothing new to assign in the current view.", "info");
-  } else {
-    showToast(`Selected ${count} subject(s). Click Save Assignment to confirm.`, "info");
-  }
-}
-
-function renderPickerRow(sub, assignedIds, requiredIds) {
-  const isCredited = currentCreditedMap.has(sub.id);
-  const isAssigned = assignedIds.has(sub.id);
-  const isOffPlan = !requiredIds.has(sub.id);
-  const missingPrereq = isCredited ? "" : unmetPrerequisites(sub, currentCreditedMap);
-
-  const badges = [];
-  if (isCredited) badges.push(`<span class="badge bg-success">Credited</span>`);
-  if (isAssigned && !isCredited) badges.push(`<span class="badge bg-info text-dark">Assigned</span>`);
-  if (isOffPlan) badges.push(`<span class="badge bg-secondary">Off-plan</span>`);
-  if (missingPrereq) badges.push(`<span class="badge bg-warning text-dark" title="Prerequisite not yet credited">Needs ${escapeHtml(missingPrereq)} first</span>`);
-
-  // Credited subjects are already completed - the checkbox is disabled but
-  // keeps its current assigned state (a disabled+checked box still submits as
-  // :checked, so nothing is accidentally removed on save).
-  const checkbox = `<input class="form-check-input" type="checkbox" value="${sub.id}" id="sub-${sub.id}" ${isAssigned ? "checked" : ""} ${isCredited ? "disabled" : ""}>`;
-
-  return `
-    <tr data-subject-row data-year="${escapeHtml(sub.yearLevel)}" data-semester="${escapeHtml(sub.semester)}" data-search="${escapeHtml((sub.subjectCode + " " + sub.subjectName).toLowerCase())}">
-      <td>${checkbox}</td>
-      <td class="text-nowrap">${escapeHtml(sub.yearLevel)}</td>
-      <td class="text-nowrap">${escapeHtml(sub.semester)}</td>
-      <td class="text-nowrap"><label for="sub-${sub.id}">${escapeHtml(sub.subjectCode)}</label></td>
-      <td><label for="sub-${sub.id}">${escapeHtml(sub.subjectName)}</label></td>
-      <td>${escapeHtml(sub.units)}</td>
-      <td class="text-nowrap">${escapeOrDash(sub.prerequisite)}</td>
-      <td>${badges.join(" ") || "<span class='text-muted small'>-</span>"}</td>
-    </tr>`;
-}
-
 function filterSubjectPicker() {
   const query = document.getElementById("subject-picker-search").value.trim().toLowerCase();
   const yearFilter = document.getElementById("subject-picker-year").value;
   const semFilter = document.getElementById("subject-picker-semester").value;
-  document.querySelectorAll("#subject-picker-table [data-subject-row]").forEach((row) => {
-    const matchesSearch = !query || row.dataset.search.includes(query);
-    const matchesYear = !yearFilter || row.dataset.year === yearFilter;
-    const matchesSem = !semFilter || row.dataset.semester === semFilter;
-    row.classList.toggle("d-none", !(matchesSearch && matchesYear && matchesSem));
+
+  document.querySelectorAll("#subject-picker-container [data-subject-row]").forEach((box) => {
+    const matchesSearch = !query || box.dataset.search.includes(query);
+    const matchesYear = !yearFilter || box.dataset.year === yearFilter;
+    const matchesSem = !semFilter || box.dataset.semester === semFilter;
+    box.classList.toggle("d-none", !(matchesSearch && matchesYear && matchesSem));
+  });
+
+  // Hide semester/year groups that end up with nothing visible, so filtering
+  // doesn't leave a trail of empty section headers.
+  document.querySelectorAll("#subject-picker-container [data-sem-group]").forEach((group) => {
+    const anyVisible = [...group.querySelectorAll("[data-subject-row]")].some((b) => !b.classList.contains("d-none"));
+    group.classList.toggle("d-none", !anyVisible);
+  });
+  document.querySelectorAll("#subject-picker-container [data-year-block]").forEach((block) => {
+    const anyVisible = [...block.querySelectorAll("[data-subject-row]")].some((b) => !b.classList.contains("d-none"));
+    block.classList.toggle("d-none", !anyVisible);
   });
 }
 
@@ -365,15 +461,15 @@ function renderCurrentAssignmentsList(assignedIds) {
     .map((id) => assignSubjects.find((s) => s.id === id))
     .filter(Boolean)
     .sort(sortByPlan);
-  return `<ul class="list-group">${items
+  return `<div class="d-flex flex-wrap gap-2">${items
     .map((sub) => {
-      const credited = currentCreditedMap.has(sub.id) ? ` <span class="badge bg-success">Credited</span>` : "";
-      return `<li class="list-group-item d-flex justify-content-between align-items-center">
-        <span><span class="text-muted small">${escapeHtml(sub.yearLevel)} &middot; ${escapeHtml(sub.semester)}</span> &nbsp; ${escapeHtml(sub.subjectCode)} - ${escapeHtml(sub.subjectName)}${credited}</span>
-        <button class="btn btn-sm btn-outline-danger" onclick="removeAssignment('${sub.id}')"><i class="bi bi-x-lg"></i></button>
-      </li>`;
+      const credited = currentCreditedMap.has(sub.id);
+      return `<span class="badge rounded-pill ${credited ? "bg-secondary" : "bg-primary"} d-inline-flex align-items-center gap-2 py-2 px-3">
+        <span>${escapeHtml(sub.subjectCode)} &middot; ${escapeHtml(sub.yearLevel)} ${escapeHtml(sub.semester)}</span>
+        ${!credited ? `<button type="button" class="btn-close btn-close-white" style="font-size:.55rem" onclick="removeAssignment('${sub.id}')" title="Remove"></button>` : ""}
+      </span>`;
     })
-    .join("")}</ul>`;
+    .join("")}</div>`;
 }
 
 async function saveAssignments(e, studentId) {

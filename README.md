@@ -119,16 +119,16 @@ Students never self-register. An Admin creates the full account in one step
 via **Admin → Students → Add Student** (First/Last Name, Email, Source
 College, Course, Curriculum, Track, Year Level, Student Type, Academic Year):
 
-1. The **SR Code** (the student's record ID / doc key) is generated
-   automatically - the admin never types one. It's sequenced per academic
-   year, e.g. `SR-25-00001`, and is shown read-only once the record exists.
+1. There is no student record code / ID for the admin to assign or type -
+   students are just enrolled. The `students` doc key is a plain
+   Firestore-generated ID under the hood, never shown or referenced in the UI.
 2. The client creates the Firebase Auth account immediately - **email** as
    entered, and **password = the student's Last Name** (padded with zeros to
    6 characters if their last name is shorter, since Firebase requires a
    6-character minimum password). The exact password used is shown in the
    confirmation toast after saving so you can pass it on to the student.
-3. It then writes `students/{srCode}` (including the new `uid`) and
-   `users/{uid}` with `role: 'student'`.
+3. It then writes the `students/{autoId}` document (including the new `uid`)
+   and `users/{uid}` with `role: 'student'`.
 4. The student logs in at `student-login.html` using their email and their
    Last Name as the password.
 
@@ -142,9 +142,8 @@ This uses a throwaway secondary Firebase App instance under the hood
 student's login doesn't sign the Admin out of their own session - the
 Firebase JS SDK otherwise only tracks one signed-in user per browser per app.
 
-Note: a Last Name as a password is predictable/guessable, same tradeoff as
-the previous Student-ID-as-password scheme. Consider having students change
-it after first login if you add that capability later.
+Note: a Last Name as a password is predictable/guessable. Consider having
+students change it after first login if you add that capability later.
 
 ## 5. Running locally
 
@@ -173,7 +172,7 @@ Your app will be live at `https://YOUR_PROJECT_ID.web.app`.
 
 ```
 users/{uid}            { role, email, fullName, studentId, createdAt, updatedAt }
-students/{srCode}       { firstName, lastName, fullName, email, college, course, curriculum, track,
+students/{autoId}      { firstName, lastName, fullName, email, college, course, curriculum, track,
                           yearLevel, studentType, academicYear, lastSchoolYearAttended, previousSchool,
                           status, uid, createdAt, updatedAt }
 subjects/{subjectId}   { subjectCode, subjectName, units, yearLevel, semester, academicYear, track, curriculum, prerequisite, status, createdAt, updatedAt }
@@ -184,9 +183,9 @@ settings/unitPolicy    { minUnits, maxUnits, updatedAt, updatedBy }
 ```
 
 Notes:
-- `students/{srCode}` doc IDs (the "SR Code") are generated automatically by
-  the app when a student is added - format `SR-{2-digit academic year}-{5-digit
-  sequence}`, e.g. `SR-25-00001`. Admins never type one manually.
+- `students/{autoId}` doc IDs are plain Firestore-generated IDs - there is no
+  human-facing student record code. The app never displays or searches by
+  this ID; students and admins alike identify a record by name/email.
 - `students.studentType` is one of `Regular`, `Irregular`, `Returnee`,
   `Transferee`, `Failed`. Only `Regular` triggers `autoCreditLowerYears()`.
   `lastSchoolYearAttended` is set for Returnee/Transferee/Failed;
@@ -263,3 +262,48 @@ was what caused the double-login symptom. `shared/js/auth.js`'s
 concluding no one is logged in, as a second layer of protection against the
 same class of race. Offline support was optional for this app, so removing
 it is a low-cost fix.
+
+## 10. UI/UX pass (login, students, assignment, evaluation)
+
+- **Login pages** — both `admin-login.html` and `student-login.html` have a
+  show/hide (eye icon) password toggle, a **Forgot password?** link
+  (`handleForgotPassword()` in `shared/js/utils.js`, sends a Firebase Auth
+  reset email), and an example email placeholder.
+- **Dashboard** — the "Total Credited Subjects" card was removed from
+  `admin/js/admin-dashboard.js`; the recent-activity table column reads
+  **Course Code** instead of Subject.
+- **Students / Subjects tables** — the Actions column is now sticky
+  (`.sticky-col-end` in `shared/css/style.css`) so Edit/Delete stay visible
+  while scrolling horizontally, and the Edit button is a solid, labeled
+  button instead of a small icon at the far edge.
+- **Add Student form** (`admin/js/admin-students.js`) — **Student Type is
+  now the first field**, above Name/Email/etc. Selecting a type shows a
+  short note about what it means for that student's subject assignment
+  (e.g. Regular auto-credits lower years and only needs the current year
+  assigned; Irregular/Returnee/Transferee/Failed need no auto-crediting and
+  should be assigned individually on the Assign Subjects page, watching for
+  prerequisites).
+- **Assign Subjects page** (`admin/js/admin-assignments.js`) was rebuilt:
+  a full-width **Select Student** search bar sits at the top (replacing the
+  old sidebar list), and the subject picker is now a grouped box/card grid
+  (`.subj-box-grid` in `shared/css/style.css`) instead of a table, with
+  clear color-coded states — available, assigned, credited, needs
+  prerequisite, off-plan. The Unit Load Policy is no longer a standalone
+  settings card at the top of the page — it's a small inline "Policy: X–Y
+  units [Edit]" control next to the running **Selected units** total inside
+  each student's assignment panel, so the limit is visible exactly where an
+  admin needs it (while checking subjects) instead of taking up permanent
+  top-of-page space. Overload/underload confirmation, Assign-All, and
+  Unselect-All logic is unchanged.
+- **Students / Subjects tables** — row action buttons (View/Edit/Delete) are
+  wrapped in a `d-flex flex-nowrap` group so they stay on one line instead
+  of stacking vertically in the sticky Actions column.
+- **Evaluation page** — removed the redundant unit count next to each
+  subject's Credited/To take pill (units are already shown in each subject
+  box on the Assignment page; repeating it here just added clutter).
+- **Evaluation page** (`shared/js/credit-eval-view.js`,
+  `admin/js/admin-evaluations.js`) now leads with an explanatory line
+  ("this is not a grade, it only tracks completion") and three summary
+  counters (Required / Credited / Still to take) above the progress bar,
+  and the year/semester filter dropdown shows semester options with a
+  visible `↳` indent instead of relying on collapsed whitespace.

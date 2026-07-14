@@ -54,13 +54,12 @@ async function loadDashboardData() {
   }
 }
 
-function renderSummaryCards({ totalStudents, graduated, inProgress, pending, totalSubjects, totalCredited }) {
+function renderSummaryCards({ totalStudents, graduated, inProgress, pending, totalSubjects }) {
   const cards = [
     { label: "Total Students", value: totalStudents, icon: "bi-people", cls: "bg-card-1" },
     { label: "Graduated Students", value: graduated, icon: "bi-check-circle", cls: "bg-card-2" },
     { label: "In Progress", value: inProgress, icon: "bi-hourglass-split", cls: "bg-card-3" },
-    { label: "Total Subjects", value: totalSubjects, icon: "bi-journal-bookmark", cls: "bg-card-4" },
-    { label: "Total Credited Subjects", value: totalCredited, icon: "bi-award", cls: "bg-card-5" }
+    { label: "Total Subjects", value: totalSubjects, icon: "bi-journal-bookmark", cls: "bg-card-4" }
   ];
   document.getElementById("summary-cards").innerHTML = cards
     .map(

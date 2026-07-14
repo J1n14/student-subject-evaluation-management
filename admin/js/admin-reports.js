@@ -78,32 +78,32 @@ async function generateReport() {
           .join("")}
       </div>
       <table class="table table-bordered table-sm">
-        <thead><tr><th>Student ID</th><th>Full Name</th><th>Track</th><th>Year</th><th>Status</th></tr></thead>
+        <thead><tr><th>Full Name</th><th>Email</th><th>Track</th><th>Year</th><th>Status</th></tr></thead>
         <tbody>${students
-          .map((s) => `<tr><td>${escapeHtml(s.id)}</td><td>${escapeHtml(s.fullName)}</td><td>${escapeHtml(s.track)}</td><td>${escapeHtml(s.yearLevel)}</td><td>${escapeHtml(s.status || "Pending")}</td></tr>`)
+          .map((s) => `<tr><td>${escapeHtml(s.fullName)}</td><td>${escapeHtml(s.email)}</td><td>${escapeOrDash(s.track)}</td><td>${escapeHtml(s.yearLevel)}</td><td>${escapeHtml(s.status || "Pending")}</td></tr>`)
           .join("")}</tbody>
       </table>`;
   } else if (type === "assignments") {
     body = `
       <table class="table table-bordered table-sm">
-        <thead><tr><th>Student ID</th><th>Student Name</th><th>Subject Code</th><th>Subject Name</th><th>Assigned At</th></tr></thead>
+        <thead><tr><th>Student Name</th><th>Subject Code</th><th>Subject Name</th><th>Assigned At</th></tr></thead>
         <tbody>${assignments
           .map((a) => {
             const s = students.find((st) => st.id === a.studentId);
             const sub = subjects[a.subjectId];
-            return `<tr><td>${escapeHtml(a.studentId)}</td><td>${escapeHtml(s ? s.fullName : "?")}</td><td>${escapeHtml(sub ? sub.subjectCode : "?")}</td><td>${escapeHtml(sub ? sub.subjectName : "?")}</td><td>${formatDate(a.assignedAt)}</td></tr>`;
+            return `<tr><td>${escapeHtml(s ? s.fullName : "?")}</td><td>${escapeHtml(sub ? sub.subjectCode : "?")}</td><td>${escapeHtml(sub ? sub.subjectName : "?")}</td><td>${formatDate(a.assignedAt)}</td></tr>`;
           })
           .join("")}</tbody>
       </table>`;
   } else if (type === "credits") {
     body = `
       <table class="table table-bordered table-sm">
-        <thead><tr><th>Student ID</th><th>Student Name</th><th>Subject</th><th>Credited From</th><th>Credited By</th><th>Date</th></tr></thead>
+        <thead><tr><th>Student Name</th><th>Subject</th><th>Credited From</th><th>Credited By</th><th>Date</th></tr></thead>
         <tbody>${creditedSubjects
           .map((c) => {
             const s = students.find((st) => st.id === c.studentId);
             const sub = subjects[c.subjectId];
-            return `<tr><td>${escapeHtml(c.studentId)}</td><td>${escapeHtml(s ? s.fullName : "?")}</td><td>${escapeHtml(sub ? sub.subjectCode : "?")}</td><td>${escapeHtml(c.creditedFrom)}</td><td>${escapeHtml(c.creditedBy)}</td><td>${formatDate(c.creditedAt)}</td></tr>`;
+            return `<tr><td>${escapeHtml(s ? s.fullName : "?")}</td><td>${escapeHtml(sub ? sub.subjectCode : "?")}</td><td>${escapeHtml(c.creditedFrom)}</td><td>${escapeHtml(c.creditedBy)}</td><td>${formatDate(c.creditedAt)}</td></tr>`;
           })
           .join("")}</tbody>
       </table>`;

@@ -124,6 +124,32 @@ function validateForm(formEl) {
   return formEl.checkValidity();
 }
 
+// ---------- Login page helpers (password visibility + forgot password) ----------
+function togglePasswordVisibility(inputId, btn) {
+  const input = document.getElementById(inputId);
+  const nowHidden = input.type === "password";
+  input.type = nowHidden ? "text" : "password";
+  const icon = btn.querySelector("i");
+  if (icon) {
+    icon.classList.toggle("bi-eye", !nowHidden);
+    icon.classList.toggle("bi-eye-slash", nowHidden);
+  }
+}
+
+async function handleForgotPassword(emailInputId) {
+  const email = (document.getElementById(emailInputId).value || "").trim();
+  if (!email) {
+    showToast("Enter your email address above first, then click Forgot Password.", "warning");
+    return;
+  }
+  try {
+    await auth.sendPasswordResetEmail(email);
+    showToast("Password reset email sent - check your inbox.");
+  } catch (err) {
+    showError(err, "Could not send the reset email. Double-check the address.");
+  }
+}
+
 // ==================== Credit Evaluation shared helpers ====================
 // Used by both Admin Evaluations (admin-evaluations.js) and the student's
 // own read-only Credit Evaluation page (student-evaluations.js).

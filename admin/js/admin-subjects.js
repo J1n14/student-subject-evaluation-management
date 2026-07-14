@@ -38,7 +38,7 @@ async function initAdminSubjects(content) {
       </div>
       <div class="table-responsive" style="max-height: calc(100vh - 260px); min-height: 300px; overflow-y: auto;">
         <table class="table table-hover table-sm align-middle mb-0">
-          <thead class="sticky-top bg-white"><tr><th>Code</th><th>Subject Name</th><th>Units</th><th class="text-nowrap">Year</th><th class="text-nowrap text-center">Track</th><th class="text-nowrap text-center">Curriculum</th><th class="text-nowrap">Prerequisite</th><th class="text-nowrap">Semester</th><th class="text-nowrap">A.Y.</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+          <thead class="sticky-top bg-white"><tr><th>Code</th><th>Subject Name</th><th>Units</th><th class="text-nowrap">Year</th><th class="text-nowrap text-center">Track</th><th class="text-nowrap text-center">Curriculum</th><th class="text-nowrap">Prerequisite</th><th class="text-nowrap">Semester</th><th class="text-nowrap">A.Y.</th><th>Status</th><th class="text-end sticky-col-end">Actions</th></tr></thead>
           <tbody id="subjects-tbody"></tbody>
         </table>
       </div>
@@ -195,9 +195,11 @@ function renderSubjectsTable() {
       <td class="text-nowrap">${escapeHtml(s.semester)}</td>
       <td class="text-nowrap">${escapeHtml(s.academicYear)}</td>
       <td>${statusBadge(s.status || "Active")}</td>
-      <td class="text-end">
-        <button class="btn btn-sm btn-outline-primary" onclick="openSubjectModal('${s.id}')" data-bs-toggle="modal" data-bs-target="#subjectModal"><i class="bi bi-pencil"></i></button>
-        <button class="btn btn-sm btn-outline-danger" onclick="deleteSubject('${s.id}')"><i class="bi bi-trash"></i></button>
+      <td class="text-end sticky-col-end">
+        <div class="d-flex gap-1 justify-content-end flex-nowrap">
+          <button class="btn btn-sm btn-primary" title="Edit subject" onclick="openSubjectModal('${s.id}')" data-bs-toggle="modal" data-bs-target="#subjectModal"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-sm btn-outline-danger" title="Delete subject" onclick="deleteSubject('${s.id}')"><i class="bi bi-trash"></i></button>
+        </div>
       </td>
     </tr>`
         )

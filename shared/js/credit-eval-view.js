@@ -42,7 +42,7 @@ function _evalFilterOptions() {
   years.forEach((y) => {
     opts.push({ key: y, label: y });
     SEM_ORDER.filter((sem) => _evalState.required.some((s) => s.yearLevel === y && s.semester === sem)).forEach((sem) =>
-      opts.push({ key: y + "||" + sem, label: "   " + y + " - " + sem })
+      opts.push({ key: y + "||" + sem, label: "↳ " + y + " - " + sem })
     );
   });
   return opts;
@@ -77,16 +77,43 @@ function _renderEvalShell() {
 
   const opts = _evalFilterOptions();
   const filterSelect =
-    `<select class="form-select form-select-sm" id="eval-filter" style="max-width:230px">` +
+    `<select class="form-select form-select-sm" id="eval-filter" style="max-width:260px">` +
     opts.map((o) => `<option value="${escapeHtml(o.key)}"${o.key === st.filter ? " selected" : ""}>${escapeHtml(o.label)}</option>`).join("") +
     `</select>`;
 
   st.container.innerHTML = `
     ${_headerHtml()}
+
+    <div class="alert alert-light border small d-flex align-items-start gap-2 mb-3">
+      <i class="bi bi-info-circle mt-1"></i>
+      <div><strong>What this page shows:</strong> which subjects ${who} curriculum requires and whether each has already been taken ("credited"). This is not a grade &mdash; it only tracks completion.</div>
+    </div>
+
+    <div class="row row-cols-3 g-2 mb-3">
+      <div class="col">
+        <div class="border rounded p-2 text-center h-100">
+          <div class="fs-4 fw-bold">${total}</div>
+          <div class="small text-muted">Required subjects</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="border rounded p-2 text-center h-100" style="background:#eafaf1">
+          <div class="fs-4 fw-bold text-success">${creditedCount}</div>
+          <div class="small text-muted">Already credited</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="border rounded p-2 text-center h-100" style="background:#fff8ec">
+          <div class="fs-4 fw-bold text-warning-emphasis">${remaining}</div>
+          <div class="small text-muted">Still to take</div>
+        </div>
+      </div>
+    </div>
+
     <div class="credit-progress mb-3">
       <div class="d-flex justify-content-between align-items-end mb-1">
         <span class="fw-semibold">Credit progress</span>
-        <span class="small text-muted">${creditedCount} of ${total} credited &middot; ${remaining} to take</span>
+        <span class="small text-muted">${pct}% complete</span>
       </div>
       <div class="progress" style="height:12px;border-radius:8px;">
         <div class="progress-bar" role="progressbar" style="width:${pct}%;" aria-valuenow="${pct}">${pct}%</div>
@@ -95,9 +122,9 @@ function _renderEvalShell() {
 
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
       <div class="eval-legend small text-muted">
-        <span class="legend-dot bg-success"></span>Credited
-        <span class="legend-dot legend-open ms-3"></span>To take
-        <span class="legend-dot bg-warning ms-3"></span>Prerequisite needed
+        <span class="legend-dot bg-success"></span>Credited &mdash; already taken
+        <span class="legend-dot legend-open ms-3"></span>To take &mdash; not yet credited
+        <span class="legend-dot bg-warning ms-3"></span>Needs prerequisite first
       </div>
       <div class="d-flex align-items-center gap-2">
         ${
@@ -209,7 +236,6 @@ function _renderSubjectRow(s) {
         <span class="subj-name">${escapeHtml(s.subjectName)}</span>
       </div>
       <div class="subj-meta">
-        <span class="units">${escapeHtml(s.units)} u</span>
         ${pill}
         ${actions}
       </div>
