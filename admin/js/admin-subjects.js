@@ -32,7 +32,13 @@ async function initAdminSubjects(content) {
             <option>Active</option><option>Inactive</option>
           </select>
         </div>
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#subjectModal" onclick="openSubjectModal()">
+        <button
+          class="btn"
+          data-bs-toggle="modal"
+          data-bs-target="#subjectModal"
+          onclick="openSubjectModal()"
+          style="background-color:#E4D9FF; border-color:#E4D9FF; color:#273469;"
+        >
           <i class="bi bi-plus-lg me-1"></i>Add Subject
         </button>
       </div>

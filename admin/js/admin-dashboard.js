@@ -95,7 +95,7 @@ function renderStatusChart(graduated, inProgress, pending) {
     type: "doughnut",
     data: {
       labels: ["Graduated", "In Progress", "Pending"],
-      datasets: [{ data: [graduated, inProgress, pending], backgroundColor: ["#2e9e6a", "#3a86c8", "#e2a53a"] }]
+      datasets: [{ data: [graduated, inProgress, pending], backgroundColor: ["#2e9e6a", "#7c5cff", "#ff8c42"] }]
     },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } }
   });

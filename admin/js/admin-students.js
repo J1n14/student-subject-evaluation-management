@@ -20,8 +20,17 @@ async function initAdminStudents(content) {
             <option value="In Progress">In Progress</option>
             <option value="Pending">Pending</option>
           </select>
+          <select class="form-select" style="width:140px" id="filter-type">
+            <option value="">All Type</option>
+          </select>
         </div>
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#studentModal" onclick="openStudentModal()">
+        <button
+          class="btn"
+          data-bs-toggle="modal"
+          data-bs-target="#studentModal"
+          onclick="openStudentModal()"
+          style="background-color:#E4D9FF; border-color:#E4D9FF; color:#273469;"
+        >
           <i class="bi bi-plus-lg me-1"></i>Add Student
         </button>
       </div>
@@ -197,6 +206,7 @@ async function initAdminStudents(content) {
   document.getElementById("search-input").addEventListener("input", debounce(() => { studentsPage = 1; renderStudentsTable(); }, 250));
   document.getElementById("filter-track").addEventListener("change", () => { studentsPage = 1; renderStudentsTable(); });
   document.getElementById("filter-status").addEventListener("change", () => { studentsPage = 1; renderStudentsTable(); });
+  document.getElementById("filter-type").addEventListener("change", () => { studentsPage = 1; renderStudentsTable(); });
 
   await loadStudents();
 }
@@ -253,13 +263,32 @@ function updateStudentTypeFields() {
 async function loadStudents() {
   const snap = await db.collection("students").orderBy("createdAt", "desc").get();
   allStudents = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  populateStudentTypeFilter();
   renderStudentsTable();
+}
+
+function populateStudentTypeFilter() {
+  const select = document.getElementById("filter-type");
+  if (!select) return;
+
+  const currentValue = select.value;
+  const types = [...new Set(allStudents.map((s) => s.studentType).filter(Boolean))].sort();
+
+  const options = types.map((type) => `<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`).join("");
+  select.innerHTML = `<option value="">All Type</option>${options}`;
+
+  if (currentValue && types.includes(currentValue)) {
+    select.value = currentValue;
+  } else {
+    select.value = "";
+  }
 }
 
 function renderStudentsTable() {
   const search = document.getElementById("search-input").value.toLowerCase();
   const trackFilter = document.getElementById("filter-track").value;
   const statusFilter = document.getElementById("filter-status").value;
+  const typeFilter = document.getElementById("filter-type").value;
 
   let filtered = allStudents.filter((s) => {
     const matchesSearch =
@@ -268,7 +297,8 @@ function renderStudentsTable() {
       (s.email || "").toLowerCase().includes(search);
     const matchesTrack = !trackFilter || s.track === trackFilter;
     const matchesStatus = !statusFilter || s.status === statusFilter;
-    return matchesSearch && matchesTrack && matchesStatus;
+    const matchesType = !typeFilter || s.studentType === typeFilter;
+    return matchesSearch && matchesTrack && matchesStatus && matchesType;
   });
 
   const { pageItems, totalPages, total } = paginate(filtered, studentsPage, STUDENTS_PAGE_SIZE);

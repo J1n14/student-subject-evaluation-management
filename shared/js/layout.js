@@ -59,7 +59,7 @@ function renderLayout(navItems, active, title, profile, redirectOnLogout) {
         <h5 class="mb-0 page-title"></h5>
         <div class="d-flex align-items-center gap-2">
           <span class="text-muted small d-none d-sm-inline">${escapeHtml(profile.fullName || profile.email)}</span>
-          <span class="badge bg-primary text-uppercase">${profile.role}</span>
+          <span class="badge text-uppercase" style="background-color:#E4D9FF; color:#1E2749;">${profile.role}</span>
         </div>
       </header>
       <main class="content-area" id="content-area"></main>

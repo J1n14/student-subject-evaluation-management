@@ -5,13 +5,13 @@
   --surface: #ffffff;
   --surface-alt: #E4D9FF;
   --accent: #E4D9FF;
-  --text-dark: #30343F;
+  --text-dark: #1E2749;
 }
 
 body {
   background-color: var(--bg-soft);
   color: var(--text-dark);
-  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  font-family: "Century Gothic", Roboto, Arial, sans-serif;
 }
 
 /* ---------- Auth pages ---------- */
@@ -20,7 +20,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-dark) 100%);
+  background: linear-gradient(135deg, #1E2749 0%, #E4D9FF 100%);
 }
 
 .auth-card {
@@ -39,10 +39,10 @@ body {
   padding: 1.75rem 1.5rem 1.25rem;
 }
 .brand-logo {
-  width: 96px;
+  width: 146px;
   max-width: 100%;
   height: auto;
-  margin: 0 auto 0.75rem;
+  margin: 0 auto 0.35rem;
   display: block;
 }
 
@@ -56,6 +56,42 @@ body {
 .role-select-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 14px 30px rgba(0, 0, 0, 0.18);
+}
+
+.password-field-wrapper {
+  position: relative;
+}
+
+.password-field-wrapper .form-control {
+  padding-right: 3.75rem;
+}
+
+.password-toggle-btn {
+  position: absolute;
+  top: 50%;
+  right: 0.5rem;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: #1E2749;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  cursor: pointer;
+  border-radius: 0.35rem;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.password-toggle-btn:hover,
+.password-toggle-btn:focus-visible {
+  background: rgba(255, 255, 255, 0.15);
+  outline: none;
+}
+
+.password-toggle-btn:focus-visible {
+  box-shadow: 0 0 0 0.2rem rgba(228, 217, 255, 0.35);
 }
 
 /* ---------- App shell ---------- */
@@ -80,6 +116,7 @@ body {
 .sidebar-brand {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.75rem;
   font-weight: 600;
   font-size: 0.98rem;
@@ -88,9 +125,10 @@ body {
   margin-bottom: 0.5rem;
 }
 .sidebar-logo {
-  width: 40px;
+  width: 64px;
   height: auto;
   flex-shrink: 0;
+  display: block;
 }
 .sidebar-brand-text {
   display: flex;
