@@ -76,6 +76,7 @@ async function initAdminEvaluations(content) {
   });
   document.getElementById("credit-form").addEventListener("submit", saveCreditedSubject);
   document.getElementById("creditSubjectId").addEventListener("change", updateCreditedFromHint);
+  document.getElementById("creditedFrom").addEventListener("input", debounce(() => updateCreditedFromHint({ keepValue: true }), 400));
 
   const snap = await db.collection("students").orderBy("fullName").get();
   evalStudents = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -180,6 +181,16 @@ function findAcceptedCourseMatchByCode(subjectCode, exceptions) {
       e.status === "accepted" &&
       (normalizeCourseMatchCode(e.oldCode) === code || normalizeCourseMatchCode(e.newCode) === code)
   );
+}
+
+// Given a courseMatchExceptions doc and the subject being credited, returns
+// the code/name of the OTHER side of the pair (works whether `subject` is
+// the old or new side, and whether the other side is a real catalog subject
+// or an external/manual entry with no subjectId).
+function otherSideOfException(subject, exception) {
+  if (!exception) return { code: "", name: "" };
+  if (exception.oldSubjectId === subject.id) return { code: exception.newCode, name: exception.newName };
+  return { code: exception.oldCode, name: exception.oldName };
 }
 
 function hasTransferredSubjectCode(subjectCode) {
@@ -391,24 +402,31 @@ async function updateCreditedFromHint(opts = {}) {
   const transferredMatch = hasTransferredSubjectCode(subjectCode);
   const acceptedCodeMatch = findAcceptedCourseMatchByCode(subjectCode, exceptions);
   let equivalence = getCourseEquivalence(subject, allSubjects, exceptions);
+  if (equivalence) equivalence.source = "catalog";
 
-  // If admin typed an external course in the Credited From field, parse it
+  // What the admin typed in "Credited From" is only trusted as the SAME
+  // course when its code AND name match this subject exactly. Anything else
+  // - same code but a different name, or a different code entirely - needs
+  // an admin to review and accept it as an equivalent course in Course
+  // Matches before it can be used to credit this subject (the actual block
+  // happens in saveCreditedSubject(); this just surfaces the current status
+  // as a hint, and files a pending Course Match if none exists yet).
   const creditedFromRaw = document.getElementById("creditedFrom").value;
   const parsed = parseCreditedFromInput(creditedFromRaw);
-  if (parsed && parsed.code === normalizeCourseMatchCode(subjectCode) && parsed.name && parsed.name !== subject.subjectName) {
-    // Create a pending exception that represents the external name vs catalog subject
-    const pending = await createPendingExceptionFromExternal(subject, parsed.code, parsed.name);
-    if (pending) {
+  const isExactTypedMatch = parsed && parsed.code === normalizeCourseMatchCode(subjectCode) && parsed.name === subject.subjectName;
+  if (parsed && parsed.name && !isExactTypedMatch) {
+    const match = await createPendingExceptionFromExternal(subject, parsed.code, parsed.name);
+    if (match) {
       courseMatchExceptionsCache = null;
-      equivalence = { type: "pending", match: equivalence?.match || null, exception: pending };
+      equivalence = { type: match.status, match: null, exception: match, source: "typed" };
     }
   }
 
-  if (equivalence && equivalence.type === "pending") {
+  if (equivalence && equivalence.type === "pending" && equivalence.source === "catalog") {
     const pending = await ensurePendingCourseMatch(subject, equivalence);
     if (pending) {
       courseMatchExceptionsCache = null;
-      equivalence = { type: "pending", match: equivalence.match, exception: pending };
+      equivalence = { type: "pending", match: equivalence.match, exception: pending, source: "catalog" };
     }
   }
 
@@ -431,25 +449,42 @@ async function updateCreditedFromHint(opts = {}) {
     return;
   }
 
+  const other = equivalence.match
+    ? { code: equivalence.match.subjectCode, name: equivalence.match.subjectName }
+    : otherSideOfException(subject, equivalence.exception);
+
   if (equivalence.type === "exact") {
     input.required = false;
     if (!opts.keepValue && !input.value.trim()) {
-      input.value = `${equivalence.match.subjectCode} - ${equivalence.match.subjectName} (same course, auto-matched)`;
+      // No suffix note here - the value round-trips through
+      // parseCreditedFromInput()/isExactTypedMatch on every future edit, and
+      // an appended note would make the name stop matching the subject's own
+      // name exactly, incorrectly flagging an already-exact match as pending.
+      input.value = `${equivalence.match.subjectCode} - ${equivalence.match.subjectName}`;
     }
     hint.textContent = "Same course, code + name match with the other curriculum — no need to fill this in unless you want to add a note.";
     hint.className = "form-text text-success";
   } else if (equivalence.type === "accepted") {
     input.required = true;
-    hint.textContent = `Accepted as equivalent to ${equivalence.match.subjectCode} - ${equivalence.match.subjectName} (reviewed in Course Matches). Specify where it was actually taken below.`;
+    hint.textContent = `Accepted as equivalent to ${other.code} - ${other.name} (reviewed in Course Matches). Specify where it was actually taken below.`;
     hint.className = "form-text text-muted";
   } else if (equivalence.type === "rejected") {
     input.required = true;
-    hint.textContent = `Note: reviewed and rejected as equivalent to "${equivalence.match.subjectName}" in Course Matches — treat this as a separate course.`;
-    hint.className = "form-text text-muted";
+    if (equivalence.source === "typed") {
+      hint.innerHTML = `This entry was reviewed and rejected as equivalent to <strong>${escapeHtml(subject.subjectCode)} - ${escapeHtml(subject.subjectName)}</strong> in Course Matches, so it can't be used to credit this subject. Fix the "Credited From" entry, or resolve it in <a href="admin-course-matches.html" target="_blank">Course Matches</a>.`;
+      hint.className = "form-text text-danger";
+    } else {
+      hint.textContent = `Note: reviewed and rejected as equivalent to "${other.name}" in Course Matches — treat this as a separate course.`;
+      hint.className = "form-text text-muted";
+    }
   } else {
     // pending
     input.required = true;
-    hint.innerHTML = `⚠️ This code also exists as "${escapeHtml(equivalence.match.subjectName)}" in the other curriculum, not yet reviewed. If this is the same course carried over, review and accept the match in <a href="admin-course-matches.html" target="_blank">Course Matches</a>, then come back to credit it. Otherwise, specify below where it was actually taken (e.g. a different school).`;
+    if (equivalence.source === "typed") {
+      hint.innerHTML = `⚠️ "${escapeHtml(other.code)} - ${escapeHtml(other.name)}" isn't a confirmed match for this subject yet, so it can't be used to credit it. Review and accept the match in <a href="admin-course-matches.html" target="_blank">Course Matches</a> first, or fix the "Credited From" entry if this was a mistake.`;
+    } else {
+      hint.innerHTML = `⚠️ This code also exists as "${escapeHtml(other.name)}" in the other curriculum, not yet reviewed. If this is the same course carried over, review and accept the match in <a href="admin-course-matches.html" target="_blank">Course Matches</a>, then come back to credit it. Otherwise, specify below where it was actually taken (e.g. a different school).`;
+    }
     hint.className = "form-text text-warning";
   }
 
@@ -513,19 +548,26 @@ async function saveCreditedSubject(e) {
     const subject = allSubjects.find((s) => s.id === subjectId);
     const equivalence = getCourseEquivalence(subject, allSubjects, exceptions);
 
-    // If the admin typed an external credited-from with same code but different name,
-    // create a pending exception and block saving until review.
+    // Only credit strictly: the typed "Credited From" course must match this
+    // subject's code AND name exactly. Same code but a different name is
+    // pending (needs Course Match review); a different code entirely is
+    // never auto-creditable - both cases require an explicit "accepted"
+    // Course Match before the save is allowed to go through.
     const parsed = parseCreditedFromInput(currentCreditedFrom);
-    const acceptedCodeMatch = findAcceptedCourseMatchByCode(subject?.subjectCode, exceptions);
-    if (parsed && parsed.code === normalizeCourseMatchCode(subject?.subjectCode) && parsed.name && parsed.name !== subject.subjectName && !acceptedCodeMatch) {
-      await createPendingExceptionFromExternal(subject, parsed.code, parsed.name);
-      document.getElementById("creditedFrom").value = currentCreditedFrom;
-      showToast(
-        "This credited-from entry appears to be a same-code but different-name course. Review and accept the Course Match before crediting.",
-        "error"
-      );
-      btn.disabled = false;
-      return;
+    const isExactTypedMatch = parsed && parsed.code === normalizeCourseMatchCode(subject?.subjectCode) && parsed.name === subject?.subjectName;
+    if (parsed && parsed.name && !isExactTypedMatch) {
+      const match = await createPendingExceptionFromExternal(subject, parsed.code, parsed.name);
+      if (!match || match.status !== "accepted") {
+        document.getElementById("creditedFrom").value = currentCreditedFrom;
+        showToast(
+          match?.status === "rejected"
+            ? "This course was already reviewed and rejected as equivalent in Course Matches — it can't be used to credit this subject."
+            : "This credited-from course isn't a confirmed match for this subject yet. Review and accept it in Course Matches before crediting.",
+          "error"
+        );
+        btn.disabled = false;
+        return;
+      }
     }
 
     if (equivalence?.type === "pending") {
