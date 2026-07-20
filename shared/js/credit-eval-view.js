@@ -332,11 +332,19 @@ function _renderSubjectRow(s) {
   const credited = st.creditedMap.has(s.id);
   let pill;
   let actions = "";
+  let creditedNote = "";
 
   if (credited) {
+    const rec = st.creditedMap.get(s.id);
     pill = `<span class="badge rounded-pill bg-success">Credited</span>`;
+    // Surfaces what this credit was actually earned as - most useful for a
+    // same-code/different-name Course Match that got accepted, so the note
+    // shows the original course name/code the admin credited it from
+    // instead of it just silently looking identical to the subject itself.
+    if (rec.creditedFrom && rec.creditedFrom.trim()) {
+      creditedNote = `<div class="subj-credited-note text-muted small" title="Credited from: ${escapeHtml(rec.creditedFrom)}"><i class="bi bi-arrow-return-right me-1"></i>Credited from: ${escapeHtml(rec.creditedFrom)}</div>`;
+    }
     if (st.interactive) {
-      const rec = st.creditedMap.get(s.id);
       actions = `<button class="btn btn-sm btn-outline-danger border-0" title="Remove credit" onclick="deleteCreditedSubject('${rec.id}','${st.student.id}')"><i class="bi bi-x-lg"></i></button>`;
     }
   } else {
@@ -365,6 +373,7 @@ function _renderSubjectRow(s) {
       <div class="subj-main">
         <span class="subj-code">${escapeHtml(s.subjectCode)}</span>
         <span class="subj-name">${escapeHtml(s.subjectName)}</span>
+        ${creditedNote}
       </div>
       <div class="subj-meta">
         ${pill}
