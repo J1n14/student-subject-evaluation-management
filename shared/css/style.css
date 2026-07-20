@@ -347,6 +347,7 @@ thead .sticky-col-end {
 .subj-picker-table tr.row-credited td:first-child { border-left-color: #adb5bd; }
 .subj-picker-table tr.row-prereq td { background: #fff8ec; }
 .subj-picker-table tr.row-prereq td:first-child { border-left-color: #e2a53a; }
+.subj-picker-table tr.row-prereq:has(input:disabled) { cursor: not-allowed; }
 .subj-picker-table tr.row-offplan td:first-child { border-left: 4px dashed #adb5bd; }
 
 /* ---------- Subject Assignment / Evaluation: currently-assigned table ---------- */

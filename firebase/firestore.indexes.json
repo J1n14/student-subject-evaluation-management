@@ -7,6 +7,14 @@
         { "fieldPath": "action", "order": "ASCENDING" },
         { "fieldPath": "timestamp", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "creditedSubjects",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "studentId", "order": "ASCENDING" },
+        { "fieldPath": "creditedAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

@@ -11,12 +11,16 @@ const SEM_ORDER = ["1st Semester", "2nd Semester", "Midterm", "Summer"];
 // Module-level state so the filter dropdown can re-render on its own.
 let _evalState = null;
 
-// Build the data model once from raw docs.
-function buildEvalModel(student, allSubjects, creditedDocs) {
+// Build the data model once from raw docs. assignedDocs = the student's
+// current studentSubjects records (subjects the Admin has assigned them for
+// this term but haven't been credited yet) - used to show "Taking" instead
+// of "To take" for subjects currently in progress.
+function buildEvalModel(student, allSubjects, creditedDocs, assignedDocs = []) {
   const required = getRequiredSubjects(student, allSubjects);
   const requiredById = Object.fromEntries(required.map((s) => [s.id, s]));
   const creditedMap = buildCreditedMap(creditedDocs);
-  return { required, requiredById, creditedMap };
+  const assignedIds = new Set(assignedDocs.map((a) => a.subjectId));
+  return { required, requiredById, creditedMap, assignedIds };
 }
 
 // Entry point. container: element to render into.
@@ -30,6 +34,7 @@ function renderCreditEvaluation(container, opts) {
     required: model.required,
     requiredById: model.requiredById,
     creditedMap: model.creditedMap,
+    assignedIds: model.assignedIds || new Set(),
     interactive: !!opts.interactive,
     filter: defaultFilter
   };
@@ -118,6 +123,7 @@ function _renderEvalShell() {
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
       <div class="eval-legend small text-muted">
         <span class="legend-dot bg-success"></span>Credited &mdash; already taken
+        <span class="legend-dot bg-primary ms-3"></span>Taking &mdash; currently assigned this term
         <span class="legend-dot legend-open ms-3"></span>To take &mdash; not yet credited
         <span class="legend-dot bg-warning ms-3"></span>Needs prerequisite first
       </div>
@@ -216,9 +222,14 @@ function _renderSubjectRow(s) {
   } else {
     const reason = getNotCreditedReason(s, st.creditedMap, st.requiredById);
     const isPrereq = reason.indexOf("Requires prerequisite") === 0;
-    pill = isPrereq
-      ? `<span class="badge rounded-pill bg-warning text-dark" title="${escapeHtml(reason)}">Prereq needed</span>`
-      : `<span class="badge rounded-pill open-pill">To take</span>`;
+    const isTaking = !isPrereq && st.assignedIds.has(s.id);
+    if (isPrereq) {
+      pill = `<span class="badge rounded-pill bg-warning text-dark" title="${escapeHtml(reason)}">Prereq needed</span>`;
+    } else if (isTaking) {
+      pill = `<span class="badge rounded-pill bg-primary">Taking</span>`;
+    } else {
+      pill = `<span class="badge rounded-pill open-pill">To take</span>`;
+    }
     if (st.interactive) {
       actions = `<button class="btn btn-sm btn-outline-primary" onclick="openCreditModal(null,'${s.id}')" data-bs-toggle="modal" data-bs-target="#creditModal">Mark credited</button>`;
     }

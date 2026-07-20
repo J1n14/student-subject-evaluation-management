@@ -10,6 +10,7 @@ const ADMIN_NAV = [
   { key: "subjects", label: "Subjects", href: "admin-subjects.html", icon: "bi-journal-bookmark" },
   { key: "assignments", label: "Subject Assignment", href: "admin-assignments.html", icon: "bi-diagram-3" },
   { key: "evaluations", label: "Evaluations", href: "admin-evaluations.html", icon: "bi-clipboard-check" },
+  { key: "course-matches", label: "Course Matches", href: "admin-course-matches.html", icon: "bi-shuffle" },
   { key: "reports", label: "Reports", href: "admin-reports.html", icon: "bi-file-earmark-bar-graph" }
 ];
 

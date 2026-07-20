@@ -136,6 +136,7 @@ async function initAdminStudents(content) {
                     <option>Service Management</option>
                     <option>Business Analytics</option>
                   </select>
+                  <div class="invalid-feedback">Track is required for Old Curriculum students.</div>
                 </div>
               </div>
 
@@ -203,12 +204,24 @@ async function initAdminStudents(content) {
 
   document.getElementById("student-form").addEventListener("submit", saveStudent);
   document.getElementById("studentType").addEventListener("change", updateStudentTypeFields);
+  document.getElementById("curriculum").addEventListener("change", updateTrackRequirement);
   document.getElementById("search-input").addEventListener("input", debounce(() => { studentsPage = 1; renderStudentsTable(); }, 250));
   document.getElementById("filter-track").addEventListener("change", () => { studentsPage = 1; renderStudentsTable(); });
   document.getElementById("filter-status").addEventListener("change", () => { studentsPage = 1; renderStudentsTable(); });
   document.getElementById("filter-type").addEventListener("change", () => { studentsPage = 1; renderStudentsTable(); });
 
   await loadStudents();
+}
+
+// Old curriculum has real track electives (Network Technology / Business
+// Analytics / Service Management) - leaving Track blank for an Old-curriculum
+// student makes getRequiredSubjects() silently skip those subjects entirely,
+// which can let a student "Graduate" without ever taking their electives.
+// New curriculum has no track split, so Track stays optional there.
+function updateTrackRequirement() {
+  const curriculum = document.getElementById("curriculum").value;
+  const trackInput = document.getElementById("track");
+  trackInput.required = curriculum === "Old";
 }
 
 // Student Type drives which extra fields apply:
@@ -367,10 +380,12 @@ function openStudentModal(id) {
     document.getElementById("status").value = s.status || "Pending";
     document.getElementById("statusFieldWrap").style.display = "block";
     updateStudentTypeFields();
+    updateTrackRequirement();
   } else {
     document.getElementById("studentModalTitle").textContent = "Add Student";
     document.getElementById("newStudentIdNotice").style.display = "block";
     updateStudentTypeFields();
+    updateTrackRequirement();
   }
 }
 
@@ -412,8 +427,17 @@ async function autoCreditLowerYears(studentId, student) {
   });
   if (lowerYear.length === 0) return 0;
 
+  // Only credit subjects that AREN'T already credited. Without this check,
+  // calling this on every edit (not just creation) re-writes creditedAt /
+  // creditedBy for every lower-year subject every time - silently corrupting
+  // credit history and misleading the "Auto-credited N subject(s)" toast.
+  const creditedSnap = await db.collection("creditedSubjects").where("studentId", "==", studentId).get();
+  const alreadyCredited = new Set(creditedSnap.docs.map((d) => d.data().subjectId));
+  const toCredit = lowerYear.filter((s) => !alreadyCredited.has(s.id));
+  if (toCredit.length === 0) return 0;
+
   const batch = db.batch();
-  lowerYear.forEach((sub) => {
+  toCredit.forEach((sub) => {
     const ref = db.collection("creditedSubjects").doc(`${studentId}_${sub.id}`);
     batch.set(
       ref,
@@ -429,7 +453,7 @@ async function autoCreditLowerYears(studentId, student) {
     );
   });
   await batch.commit();
-  return lowerYear.length;
+  return toCredit.length;
 }
 
 async function saveStudent(e) {

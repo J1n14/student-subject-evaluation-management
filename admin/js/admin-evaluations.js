@@ -40,6 +40,7 @@ async function initAdminEvaluations(content) {
                 <label class="form-label">Credited From (old school course)</label>
                 <input type="text" class="form-control" id="creditedFrom" placeholder="e.g. GE 1102 - Mathematics in the Modern World" required />
                 <div class="invalid-feedback">Required.</div>
+                <div class="form-text" id="creditedFromHint"></div>
               </div>
               <div class="mb-3">
                 <label class="form-label">Remarks</label>
@@ -64,6 +65,7 @@ async function initAdminEvaluations(content) {
     }
   });
   document.getElementById("credit-form").addEventListener("submit", saveCreditedSubject);
+  document.getElementById("creditSubjectId").addEventListener("change", updateCreditedFromHint);
 
   const snap = await db.collection("students").orderBy("fullName").get();
   evalStudents = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -135,19 +137,65 @@ async function getSubjectsCatalog() {
   return subjectsCatalogCache;
 }
 
+let courseMatchExceptionsCache = null;
+async function getCourseMatchExceptions() {
+  if (courseMatchExceptionsCache) return courseMatchExceptionsCache;
+  const snap = await db.collection("courseMatchExceptions").get();
+  courseMatchExceptionsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  return courseMatchExceptionsCache;
+}
+
+// Looks across the OTHER curriculum for a subject sharing this one's code,
+// and classifies the relationship so the credit form can react to it:
+//   "exact"    - same code AND same name -> definitely the same course.
+//                 "Credited From" isn't really needed in this case.
+//   "accepted" - code matches, name differs, but an Admin already reviewed
+//                 and accepted it as equivalent on the Course Matches page.
+//   "pending"  - code matches, name differs, and nobody's reviewed it yet -
+//                 flag it so the admin knows to go decide, but don't block
+//                 crediting (could still be a genuine external-school TOR
+//                 entry that just happens to share a code).
+//   "rejected" - code matches, name differs, and an Admin already decided
+//                 these are NOT the same course.
+//   null       - no code overlap in the other curriculum at all (typical
+//                 case for a subject brought in from an outside school).
+function getCourseEquivalence(subject, allSubjects, exceptions) {
+  if (!subject) return null;
+  const subjectCurriculum = subject.curriculum || "New";
+  const otherCurriculum = subjectCurriculum === "Old" ? "New" : "Old";
+
+  const candidates = allSubjects.filter(
+    (s) => s.id !== subject.id && s.subjectCode === subject.subjectCode && (s.curriculum || "New") === otherCurriculum
+  );
+  if (candidates.length === 0) return null;
+
+  const exact = candidates.find((s) => s.subjectName === subject.subjectName);
+  if (exact) return { type: "exact", match: exact };
+
+  for (const cand of candidates) {
+    const oldId = subjectCurriculum === "Old" ? subject.id : cand.id;
+    const newId = subjectCurriculum === "Old" ? cand.id : subject.id;
+    const exception = exceptions.find((e) => e.oldSubjectId === oldId && e.newSubjectId === newId);
+    if (exception) return { type: exception.status, match: cand, exception };
+  }
+  return { type: "pending", match: candidates[0] }; // code overlap, name differs, never scanned/no exception doc yet
+}
+
 async function selectStudentForCreditEvaluation(studentId) {
   currentSelectedStudentId = studentId;
   const student = evalStudents.find((s) => s.id === studentId);
   const panel = document.getElementById("credit-evaluation-panel");
   panel.innerHTML = `<div class="text-muted small">Loading...</div>`;
 
-  const [allSubjectsArr, creditedSnap] = await Promise.all([
+  const [allSubjectsArr, creditedSnap, assignSnap] = await Promise.all([
     getSubjectsCatalog(),
-    db.collection("creditedSubjects").where("studentId", "==", studentId).get()
+    db.collection("creditedSubjects").where("studentId", "==", studentId).get(),
+    db.collection("studentSubjects").where("studentId", "==", studentId).get()
   ]);
 
   const creditedDocs = creditedSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  const model = buildEvalModel(student, allSubjectsArr, creditedDocs);
+  const assignedDocs = assignSnap.docs.map((d) => d.data());
+  const model = buildEvalModel(student, allSubjectsArr, creditedDocs, assignedDocs);
 
   creditTabState = {
     student,
@@ -161,12 +209,13 @@ async function selectStudentForCreditEvaluation(studentId) {
 
 // creditId: edit an existing record. preselectSubjectId: pre-choose a subject
 // (used by the "Mark credited" buttons in the grouped view).
-function openCreditModal(creditId, preselectSubjectId) {
+async function openCreditModal(creditId, preselectSubjectId) {
   const form = document.getElementById("credit-form");
   form.classList.remove("was-validated");
   form.reset();
   document.getElementById("creditDocId").value = "";
   document.getElementById("creditModalTitle").textContent = "Add Credited Subject";
+  document.getElementById("creditedFromHint").textContent = "";
 
   const { requiredSubjects, creditedMap } = creditTabState;
   const existingRecord = creditId ? [...creditedMap.values()].find((r) => r.id === creditId) : null;
@@ -191,9 +240,64 @@ function openCreditModal(creditId, preselectSubjectId) {
     select.disabled = true;
     document.getElementById("creditedFrom").value = existingRecord.creditedFrom || "";
     document.getElementById("creditRemarks").value = existingRecord.remarks || "";
+    await updateCreditedFromHint({ keepValue: true });
   } else {
     select.disabled = false;
     if (preselectSubjectId) select.value = preselectSubjectId;
+    await updateCreditedFromHint({ keepValue: false });
+  }
+}
+
+// Reacts to the subject dropdown: looks up whether the selected subject has
+// a known equivalent in the other curriculum and adjusts the "Credited
+// From" field's requirement + explanatory hint accordingly. Only
+// auto-fills the field (rather than just hinting) for a brand-new record
+// with a genuine exact code+name match, and never overwrites text the
+// admin already typed.
+async function updateCreditedFromHint(opts = {}) {
+  const subjectId = document.getElementById("creditSubjectId").value;
+  const input = document.getElementById("creditedFrom");
+  const hint = document.getElementById("creditedFromHint");
+  if (!hint) return;
+
+  if (!subjectId) {
+    input.required = true;
+    hint.textContent = "";
+    hint.className = "form-text";
+    return;
+  }
+
+  const [allSubjects, exceptions] = await Promise.all([getSubjectsCatalog(), getCourseMatchExceptions()]);
+  const subject = allSubjects.find((s) => s.id === subjectId);
+  const equivalence = getCourseEquivalence(subject, allSubjects, exceptions);
+
+  if (!equivalence) {
+    input.required = true;
+    hint.textContent = "";
+    hint.className = "form-text";
+    return;
+  }
+
+  if (equivalence.type === "exact") {
+    input.required = false;
+    if (!opts.keepValue && !input.value.trim()) {
+      input.value = `${equivalence.match.subjectCode} - ${equivalence.match.subjectName} (same course, auto-matched)`;
+    }
+    hint.textContent = "Same course, code + name match with the other curriculum — no need to fill this in unless you want to add a note.";
+    hint.className = "form-text text-success";
+  } else if (equivalence.type === "accepted") {
+    input.required = true;
+    hint.textContent = `Accepted as equivalent to ${equivalence.match.subjectCode} - ${equivalence.match.subjectName} (reviewed in Course Matches). Specify where it was actually taken below.`;
+    hint.className = "form-text text-muted";
+  } else if (equivalence.type === "rejected") {
+    input.required = true;
+    hint.textContent = `Note: reviewed and rejected as equivalent to "${equivalence.match.subjectName}" in Course Matches — treat this as a separate course.`;
+    hint.className = "form-text text-muted";
+  } else {
+    // pending
+    input.required = true;
+    hint.innerHTML = `⚠️ This code also exists as "${escapeHtml(equivalence.match.subjectName)}" in the other curriculum, not yet reviewed. If this is the same course carried over, ask an Admin to accept the match in <a href="admin-course-matches.html" target="_blank">Course Matches</a>. Otherwise, specify below where this was actually taken (e.g. a different school).`;
+    hint.className = "form-text text-warning";
   }
 }
 

@@ -77,6 +77,20 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // ---------------- courseMatchExceptions ----------------
+    // Logged when a subject's code matches across Old/New curricula but the
+    // name differs, pending an Admin's accept/reject decision. Admin-only.
+    match /courseMatchExceptions/{exceptionId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ---------------- courseMatchRequests ----------------
+    // Pending credit requests created when a matched course is credited but
+    // requires review first. Admin-only.
+    match /courseMatchRequests/{requestId} {
+      allow read, write: if isAdmin();
+    }
+
     // ---------------- activityLogs ----------------
     // Any signed-in user may write a log entry for themselves; only Admins
     // may read the log (used on the Admin dashboard).

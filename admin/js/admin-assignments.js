@@ -2,6 +2,7 @@ let assignStudents = [];
 let assignSubjects = []; // full subject catalog (needed for curriculum/track matching + prereq lookup)
 let currentAssignments = []; // studentSubjects docs for the selected student
 let currentCreditedMap = new Map(); // subjectId -> credited record for the selected student
+let currentDisplaySubjects = []; // required + off-plan subjects for the selected student (prereq lookup scope)
 let selectedAssignmentStudentId = null;
 
 // Admin-configurable unit load policy, stored at settings/unitPolicy.
@@ -75,13 +76,18 @@ function sortByPlan(a, b) {
 
 // Returns a comma-separated list of prerequisite codes that are NOT yet
 // credited for this student (empty string if all prerequisites are met).
-function unmetPrerequisites(subject, creditedMap) {
+// IMPORTANT: looks up prerequisite codes within `requiredSubjects` (the
+// student's OWN curriculum+track plan), not the whole catalog - otherwise a
+// reused subject code from a different curriculum/track can resolve to the
+// wrong subject, disagreeing with getNotCreditedReason() in utils.js which
+// is scoped the same way.
+function unmetPrerequisites(subject, creditedMap, requiredSubjects) {
   const text = (subject.prerequisite || "").trim();
   if (!text) return "";
   const codes = text.split(",").map((c) => c.trim()).filter(Boolean);
   const missing = [];
   for (const code of codes) {
-    const pre = assignSubjects.find((s) => s.subjectCode === code);
+    const pre = requiredSubjects.find((s) => s.subjectCode === code);
     if (!pre || !creditedMap.has(pre.id)) missing.push(code);
   }
   return missing.join(", ");
@@ -207,6 +213,7 @@ async function selectStudentForAssignment(studentId) {
     .filter((s) => s && !requiredIds.has(s.id));
 
   const displaySubjects = [...requiredSubjects, ...offPlanAssigned].sort(sortByPlan);
+  currentDisplaySubjects = displaySubjects;
 
   const years = [...new Set(displaySubjects.map((s) => s.yearLevel))].sort(
     (a, b) => YEAR_ORDER.indexOf(a) - YEAR_ORDER.indexOf(b)
@@ -254,7 +261,7 @@ async function selectStudentForAssignment(studentId) {
         Showing the current year by default. Choose <strong>All Years</strong> to assign back-year subjects a transferee or irregular student still needs.
       </div>
       <div id="subject-picker-container" style="max-height:460px; overflow-y:auto;" class="border rounded p-2 mb-3">
-        ${displaySubjects.length ? renderSubjectBoxGrid(displaySubjects, assignedIds, requiredIds) : `<div class="text-center text-muted py-3">No subjects to display.</div>`}
+        ${displaySubjects.length ? renderSubjectBoxGrid(displaySubjects, assignedIds, requiredIds, displaySubjects) : `<div class="text-center text-muted py-3">No subjects to display.</div>`}
       </div>
       <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-1">
         <div class="small">
@@ -317,7 +324,7 @@ async function selectStudentForAssignment(studentId) {
 
 // ---------- Picker table rendering (grouped by Year > Semester) ----------
 
-function renderSubjectBoxGrid(displaySubjects, assignedIds, requiredIds) {
+function renderSubjectBoxGrid(displaySubjects, assignedIds, requiredIds, requiredSubjects) {
   const years = [...new Set(displaySubjects.map((s) => s.yearLevel))].sort(
     (a, b) => YEAR_ORDER.indexOf(a) - YEAR_ORDER.indexOf(b)
   );
@@ -336,7 +343,7 @@ function renderSubjectBoxGrid(displaySubjects, assignedIds, requiredIds) {
               <thead>
                 <tr><th></th><th>Code</th><th>Subject Name</th><th>Units</th><th>Prerequisite</th><th>Status</th></tr>
               </thead>
-              <tbody>${rows.map((sub) => renderSubjectPickerRow(sub, assignedIds, requiredIds)).join("")}</tbody>
+              <tbody>${rows.map((sub) => renderSubjectPickerRow(sub, assignedIds, requiredIds, requiredSubjects)).join("")}</tbody>
             </table>
           </div>
         </div>`;
@@ -351,11 +358,11 @@ function renderSubjectBoxGrid(displaySubjects, assignedIds, requiredIds) {
     .join("");
 }
 
-function renderSubjectPickerRow(sub, assignedIds, requiredIds) {
+function renderSubjectPickerRow(sub, assignedIds, requiredIds, requiredSubjects) {
   const isCredited = currentCreditedMap.has(sub.id);
   const isAssigned = assignedIds.has(sub.id);
   const isOffPlan = !requiredIds.has(sub.id);
-  const missingPrereq = isCredited ? "" : unmetPrerequisites(sub, currentCreditedMap);
+  const missingPrereq = isCredited ? "" : unmetPrerequisites(sub, currentCreditedMap, requiredSubjects);
 
   let stateClass = "row-available";
   if (isCredited) stateClass = "row-credited";
@@ -368,15 +375,20 @@ function renderSubjectPickerRow(sub, assignedIds, requiredIds) {
   if (isAssigned && !isCredited) badges.push(`<span class="badge bg-info text-dark">Assigned</span>`);
   if (isOffPlan) badges.push(`<span class="badge bg-secondary">Off-plan</span>`);
   if (missingPrereq)
-    badges.push(`<span class="badge bg-warning text-dark" title="Prerequisite not yet credited">Needs ${escapeHtml(missingPrereq)} first</span>`);
+    badges.push(`<span class="badge bg-warning text-dark" title="Prerequisite not yet credited"><i class="bi bi-lock-fill me-1"></i>Needs ${escapeHtml(missingPrereq)} first</span>`);
   if (!badges.length) badges.push(`<span class="badge bg-success">Available</span>`);
 
   // Credited subjects are already completed - the checkbox is disabled but
   // keeps its current assigned state (a disabled+checked box still submits as
-  // :checked, so nothing is accidentally removed on save).
+  // :checked, so nothing is accidentally removed on save). Subjects with an
+  // unmet prerequisite are also disabled UNLESS they're already assigned -
+  // that keeps an admin from being able to check a new prereq-blocked
+  // subject, while still letting them uncheck/remove one that was assigned
+  // before this rule existed.
+  const prereqLocked = !!missingPrereq && !isAssigned;
   return `
     <tr class="${stateClass}" data-subject-row data-year="${escapeHtml(sub.yearLevel)}" data-semester="${escapeHtml(sub.semester)}" data-search="${escapeHtml((sub.subjectCode + " " + sub.subjectName).toLowerCase())}">
-      <td><input class="form-check-input" type="checkbox" value="${sub.id}" ${isAssigned ? "checked" : ""} ${isCredited ? "disabled" : ""}></td>
+      <td><input class="form-check-input" type="checkbox" value="${sub.id}" ${isAssigned ? "checked" : ""} ${isCredited || prereqLocked ? "disabled" : ""} ${prereqLocked ? `title="Cannot assign - prerequisite not yet credited: ${escapeHtml(missingPrereq)}"` : ""}></td>
       <td class="subj-code-cell">${escapeHtml(sub.subjectCode)}</td>
       <td>${escapeHtml(sub.subjectName)}</td>
       <td>${escapeHtml(sub.units)}</td>
@@ -515,6 +527,24 @@ async function saveAssignments(e, studentId) {
     return;
   }
 
+  // Hard prerequisite guard: only applies to NEWLY added subjects (already-
+  // assigned ones stay untouched so an admin can still remove a legacy
+  // assignment made before this check existed). Re-checks here even though
+  // the checkbox is already disabled in the UI for these subjects, since a
+  // disabled attribute can be removed client-side (devtools) - this is the
+  // check that actually can't be bypassed without editing the source.
+  const blocked = toAdd
+    .map((id) => assignSubjects.find((s) => s.id === id))
+    .filter(Boolean)
+    .map((sub) => ({ sub, missing: unmetPrerequisites(sub, currentCreditedMap, currentDisplaySubjects) }))
+    .filter((x) => x.missing);
+
+  if (blocked.length > 0) {
+    const list = blocked.map((x) => `${x.sub.subjectCode} (needs ${x.missing})`).join("; ");
+    showToast(`Cannot save: prerequisite(s) not yet credited - ${list}.`, "error");
+    return;
+  }
+
   // Unit load check against the admin-configured policy (see the Unit Load
   // Policy panel at the top of this page). Overload requires an explicit
   // Yes/No confirmation per the required workflow; underload is flagged the
@@ -549,6 +579,13 @@ async function saveAssignments(e, studentId) {
       const ref = db.collection("studentSubjects").doc();
       batch.set(ref, { studentId, subjectId, assignedAt: serverTimestamp(), overload: isOverload });
     });
+    // Keep the overload flag on EXISTING (kept) assignments in sync with the
+    // new total too - otherwise a total that crosses the threshold on a
+    // later save only tags the newly-added subjects, and reports based on
+    // the overload field undercount.
+    currentAssignments
+      .filter((a) => checked.includes(a.subjectId) && a.overload !== isOverload)
+      .forEach((a) => batch.update(db.collection("studentSubjects").doc(a.id), { overload: isOverload }));
     toRemove.forEach((a) => batch.delete(db.collection("studentSubjects").doc(a.id)));
     await batch.commit();
     await logActivity(`Updated subject assignments for student ${studentId} (${totalUnits} units${isOverload ? ", overload approved" : ""})`);

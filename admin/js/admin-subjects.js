@@ -230,7 +230,10 @@ function openSubjectModal(id) {
     document.getElementById("units").value = s.units || "";
     document.getElementById("yearLevel").value = s.yearLevel || "";
     document.getElementById("semester").value = s.semester || "";
-    document.getElementById("track").value = s.track || "";
+    // "All Tracks" is the legacy stored value for what the dropdown now
+    // calls "General" - map it so editing an old-seeded subject doesn't show
+    // a blank Track and silently blank it out on save.
+    document.getElementById("track").value = (s.track === "All Tracks" ? "General" : s.track) || "";
     document.getElementById("curriculum").value = s.curriculum || "";
     document.getElementById("prerequisite").value = s.prerequisite || "";
     document.getElementById("academicYear").value = s.academicYear || "";
