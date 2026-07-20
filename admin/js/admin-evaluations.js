@@ -404,18 +404,17 @@ async function updateCreditedFromHint(opts = {}) {
   let equivalence = getCourseEquivalence(subject, allSubjects, exceptions);
   if (equivalence) equivalence.source = "catalog";
 
-  // Strict, code-only rule: what the admin typed in "Credited From" is
-  // trusted as the SAME course if and only if its CODE matches this
-  // subject's code - the name is not checked at all (naming conventions
-  // vary too much across curricula/schools to require an exact match).
-  // Any code mismatch needs an admin to review and accept it as an
+  // Strict rule: what the admin typed in "Credited From" is trusted as the
+  // SAME course if and only if BOTH its code AND its name match this
+  // subject 100%. Anything else - same code but a different name, or a
+  // different code entirely - needs an admin to review and accept it as an
   // equivalent course in Course Matches before it can be used to credit
   // this subject (the actual block happens in saveCreditedSubject(); this
   // just surfaces the current status as a hint, and files a pending Course
   // Match if none exists yet).
   const creditedFromRaw = document.getElementById("creditedFrom").value;
   const parsed = parseCreditedFromInput(creditedFromRaw);
-  const isExactTypedMatch = parsed && parsed.code === normalizeCourseMatchCode(subjectCode);
+  const isExactTypedMatch = parsed && parsed.code === normalizeCourseMatchCode(subjectCode) && parsed.name === subject.subjectName;
   if (parsed && !isExactTypedMatch) {
     const match = await createPendingExceptionFromExternal(subject, parsed.code, parsed.name);
     if (match) {
@@ -550,12 +549,12 @@ async function saveCreditedSubject(e) {
     const subject = allSubjects.find((s) => s.id === subjectId);
     const equivalence = getCourseEquivalence(subject, allSubjects, exceptions);
 
-    // Strict, code-only rule: credit only if the typed "Credited From"
-    // course code matches this subject's code exactly - the name is not
-    // checked. Any code mismatch goes to pending in Course Matches and
-    // blocks saving until an admin accepts it there.
+    // Strict rule: credit only if the typed "Credited From" course matches
+    // this subject's code AND name 100%. Any mismatch (code, name, or both)
+    // goes to pending in Course Matches and blocks saving until an admin
+    // accepts it there.
     const parsed = parseCreditedFromInput(currentCreditedFrom);
-    const isExactTypedMatch = parsed && parsed.code === normalizeCourseMatchCode(subject?.subjectCode);
+    const isExactTypedMatch = parsed && parsed.code === normalizeCourseMatchCode(subject?.subjectCode) && parsed.name === subject?.subjectName;
     if (parsed && !isExactTypedMatch) {
       const match = await createPendingExceptionFromExternal(subject, parsed.code, parsed.name);
       if (!match || match.status !== "accepted") {
