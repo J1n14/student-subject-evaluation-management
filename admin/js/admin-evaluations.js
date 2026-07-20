@@ -727,11 +727,23 @@ async function markSelectedCredited() {
     return;
   }
 
-  if (!confirm(`Mark ${toCredit.length} selected subject(s) as credited for ${student.fullName}?`)) return;
+  const preview = toCredit
+    .slice(0, 8)
+    .map((s) => s.subjectCode)
+    .join(", ");
+  const previewSuffix = toCredit.length > 8 ? `, +${toCredit.length - 8} more` : "";
+  if (!confirm(`Mark ${toCredit.length} selected subject(s) as credited for ${student.fullName}?\n\n${preview}${previewSuffix}`)) return;
 
   const rawInput = prompt('"Credited From" note to apply to the selected subject(s):', "Credited by admin");
   if (rawInput === null) return; // admin cancelled
   const creditedFrom = rawInput.trim();
+  const rawGrade = prompt('Enter a passing grade to apply to all of them (1.00 - 3.00):', '1.00');
+  if (rawGrade === null) return;
+  const grade = Number(rawGrade);
+  if (!rawGrade.trim() || Number.isNaN(grade) || grade < 1 || grade > 3) {
+    showToast('Selection cancelled. Enter a valid passing grade between 1.00 and 3.00.', 'error');
+    return;
+  }
 
   try {
     const batch = db.batch();
@@ -743,6 +755,7 @@ async function markSelectedCredited() {
           studentId: student.id,
           subjectId: sub.id,
           creditedFrom: creditedFrom || "Credited by admin",
+          grade,
           remarks: "Marked via selection",
           creditedBy: auth.currentUser.email,
           creditedAt: serverTimestamp()

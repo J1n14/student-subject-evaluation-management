@@ -71,6 +71,45 @@ function clearEvalSelection() {
   _updateEvalSelectionBar();
 }
 
+// Selects every required subject whose code starts with the typed prefix
+// (e.g. "GEd" matches GEd 101, GEd 102, ... across ALL years/semesters, not
+// just whatever's currently visible under the year/semester filter). Adds to
+// the existing selection rather than replacing it, and switches the view to
+// "All years" so every newly-checked row is actually visible for review
+// before the admin commits via the existing "Mark Credited" (selected) button
+// - selecting is a preview step, nothing is credited until that's clicked.
+function selectEvalByCode() {
+  const st = _evalState;
+  if (!st) return;
+  const input = document.getElementById("eval-code-filter");
+  const raw = (input?.value || "").trim();
+  if (!raw) {
+    showToast("Type a course code or prefix to match, e.g. GEd or IT.", "info");
+    return;
+  }
+
+  const needle = raw.replace(/\s+/g, "").toUpperCase();
+  const matches = st.required.filter((s) => (s.subjectCode || "").replace(/\s+/g, "").toUpperCase().startsWith(needle));
+  if (!matches.length) {
+    showToast(`No subjects found matching "${raw}".`, "info");
+    return;
+  }
+
+  matches.forEach((s) => st.selected.add(s.id));
+  st.filter = "ALL";
+  const filterSelect = document.getElementById("eval-filter");
+  if (filterSelect) filterSelect.value = "ALL";
+  document.getElementById("eval-groups").innerHTML = _renderGroups();
+  _updateEvalSelectionBar();
+
+  const alreadyCredited = matches.filter((s) => st.creditedMap.has(s.id)).length;
+  const toCredit = matches.length - alreadyCredited;
+  showToast(
+    `Selected ${matches.length} subject(s) matching "${raw}"${alreadyCredited ? ` (${alreadyCredited} already credited)` : ""}. Review below, then click "Mark Credited" to credit the remaining ${toCredit}.`,
+    "success"
+  );
+}
+
 function _updateEvalSelectionBar() {
   const st = _evalState;
   if (!st) return;
@@ -203,6 +242,19 @@ function _renderEvalShell() {
           <i class="bi bi-x-lg me-1"></i>Unmark
         </button>
         <button type="button" class="btn btn-sm btn-link text-decoration-none" id="eval-clear-selection-btn" onclick="clearEvalSelection()" disabled>Clear</button>
+        <span class="vr mx-1 d-none d-md-inline"></span>
+        <span class="small fw-semibold text-muted">By course code:</span>
+        <input
+          type="text"
+          class="form-control form-control-sm"
+          style="max-width:130px"
+          id="eval-code-filter"
+          placeholder="e.g. GEd"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();selectEvalByCode();}"
+        />
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectEvalByCode()">
+          <i class="bi bi-funnel me-1"></i>Select Matching
+        </button>
       </div>
     </div>`
         : ""
