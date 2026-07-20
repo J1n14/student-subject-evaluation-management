@@ -30,7 +30,7 @@ async function initAdminEvaluations(content) {
             <div class="modal-body">
               <input type="hidden" id="creditDocId" />
               <div class="alert alert-info small">
-                Only passing grades from <strong>1.00</strong> to <strong>3.00</strong> are accepted for credited subjects.
+                Passing grades from <strong>1.00</strong> to <strong>3.00</strong> are accepted for credited subjects, or enter <strong>INC</strong> for an Incomplete.
               </div>
               <div class="mb-3">
                 <label class="form-label">Subject</label>
@@ -48,9 +48,9 @@ async function initAdminEvaluations(content) {
               </div>
               <div class="mb-3">
                 <label class="form-label">Grade</label>
-                <input type="number" class="form-control" id="creditGrade" step="0.01" min="1" max="3" placeholder="e.g. 1.00" required />
-                <div class="invalid-feedback">Enter a passing grade between 1.00 and 3.00.</div>
-                <div class="form-text">A subject is considered passed when the grade is between 1.00 and 3.00.</div>
+                <input type="text" class="form-control" id="creditGrade" placeholder="e.g. 1.00 or INC" required />
+                <div class="invalid-feedback">Enter a passing grade between 1.00 and 3.00, or INC.</div>
+                <div class="form-text">A subject is considered passed when the grade is between 1.00 and 3.00. Enter INC for an Incomplete.</div>
               </div>
               <div class="mb-3">
                 <label class="form-label">Remarks</label>
@@ -171,6 +171,18 @@ async function getCourseMatchExceptions() {
 //   null       - no code overlap with any other subject at all.
 function normalizeCourseMatchCode(code) {
   return String(code || "").trim().toUpperCase();
+}
+
+// Accepts a passing numeric grade (1.00-3.00) or "INC" (Incomplete) for a
+// credited subject. Returns the value to store - a Number for a numeric
+// grade, or the string "INC" - or null if the input is neither.
+function parseGradeInput(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return null;
+  if (/^inc$/i.test(text)) return "INC";
+  const num = Number(text);
+  if (Number.isNaN(num) || num < 1 || num > 3) return null;
+  return num;
 }
 
 function findAcceptedCourseMatchByCode(subjectCode, exceptions) {
@@ -536,10 +548,9 @@ async function saveCreditedSubject(e) {
   btn.disabled = true;
 
   try {
-    const gradeValue = document.getElementById("creditGrade").value.trim();
-    const grade = Number(gradeValue);
-    if (!gradeValue || Number.isNaN(grade) || grade < 1 || grade > 3) {
-      showToast("Enter a valid passing grade between 1.00 and 3.00.", "error");
+    const grade = parseGradeInput(document.getElementById("creditGrade").value);
+    if (grade === null) {
+      showToast("Enter a valid passing grade between 1.00 and 3.00, or INC for Incomplete.", "error");
       btn.disabled = false;
       return;
     }
@@ -633,11 +644,11 @@ async function markAllCredited() {
   const rawInput = prompt('"Credited From" note to apply to all of them (e.g. old school / bulk carryover):', "Bulk credited by admin");
   if (rawInput === null) return; // admin cancelled
   const creditedFrom = rawInput.trim();
-  const rawGrade = prompt('Enter a passing grade to apply to all of them (1.00 - 3.00):', '1.00');
+  const rawGrade = prompt('Enter a passing grade to apply to all of them (1.00 - 3.00, or INC):', '1.00');
   if (rawGrade === null) return;
-  const grade = Number(rawGrade);
-  if (!rawGrade.trim() || Number.isNaN(grade) || grade < 1 || grade > 3) {
-    showToast('Bulk credit cancelled. Enter a valid passing grade between 1.00 and 3.00.', 'error');
+  const grade = parseGradeInput(rawGrade);
+  if (grade === null) {
+    showToast('Bulk credit cancelled. Enter a valid passing grade between 1.00 and 3.00, or INC.', 'error');
     return;
   }
 
@@ -736,11 +747,11 @@ async function markSelectedCredited() {
   const rawInput = prompt('"Credited From" note to apply to the selected subject(s):', "Credited by admin");
   if (rawInput === null) return; // admin cancelled
   const creditedFrom = rawInput.trim();
-  const rawGrade = prompt('Enter a passing grade to apply to all of them (1.00 - 3.00):', '1.00');
+  const rawGrade = prompt('Enter a passing grade to apply to all of them (1.00 - 3.00, or INC):', '1.00');
   if (rawGrade === null) return;
-  const grade = Number(rawGrade);
-  if (!rawGrade.trim() || Number.isNaN(grade) || grade < 1 || grade > 3) {
-    showToast('Selection cancelled. Enter a valid passing grade between 1.00 and 3.00.', 'error');
+  const grade = parseGradeInput(rawGrade);
+  if (grade === null) {
+    showToast('Selection cancelled. Enter a valid passing grade between 1.00 and 3.00, or INC.', 'error');
     return;
   }
 
