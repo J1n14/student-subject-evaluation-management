@@ -226,3 +226,74 @@ async function recomputeCreditStatus(studentId) {
   await db.collection("students").doc(studentId).update({ status, updatedAt: serverTimestamp() });
   return status;
 }
+
+// Evaluate a student's readiness to enroll for the current term.
+// Returns an object summarizing curriculum, completed/pending subjects,
+// unmet prerequisites, availability per current term, standing issues,
+// and unit policy limits.
+async function evaluateStudentEnrollmentReadiness(studentId) {
+  const studentDoc = await db.collection("students").doc(studentId).get();
+  if (!studentDoc.exists) return { error: "Student not found" };
+  const student = studentDoc.data();
+
+  const [subjectsSnap, creditedSnap, termDoc, unitDoc] = await Promise.all([
+    db.collection("subjects").get(),
+    db.collection("creditedSubjects").where("studentId", "==", studentId).get(),
+    db.collection("settings").doc("currentTerm").get(),
+    db.collection("settings").doc("unitPolicy").get()
+  ]);
+
+  const allSubjects = subjectsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const creditedIds = new Set(creditedSnap.docs.map((d) => d.data().subjectId));
+
+  const required = getRequiredSubjects(student, allSubjects);
+  const completed = required.filter((s) => creditedIds.has(s.id));
+  const pending = required.filter((s) => !creditedIds.has(s.id));
+
+  const currentTerm = termDoc.exists ? termDoc.data() : { academicYear: "", semester: "" };
+  const unitPolicyDoc = unitDoc.exists ? unitDoc.data() : { minUnits: null, maxUnits: null };
+
+  // Helper to compute missing prereqs for a subject within the student's required plan
+  function missingPrerequisitesFor(subject) {
+    const text = (subject.prerequisite || "").trim();
+    if (!text) return [];
+    const codes = text.split(",").map((c) => c.trim()).filter(Boolean);
+    const missing = [];
+    for (const code of codes) {
+      const prereq = required.find((r) => r.subjectCode === code);
+      if (!prereq) missing.push(code);
+      else if (!creditedIds.has(prereq.id)) missing.push(code);
+    }
+    return missing;
+  }
+
+  const pendingDetails = pending.map((s) => {
+    const missingPrereqs = missingPrerequisitesFor(s);
+    const termMismatch = (currentTerm.academicYear && s.academicYear && String(s.academicYear) !== String(currentTerm.academicYear)) ||
+      (currentTerm.semester && s.semester && String(s.semester) !== String(currentTerm.semester));
+    const eligibility = [];
+    if (student?.academicHold) eligibility.push("academic hold");
+    const minGpa = Number(s.minGpa);
+    const studentGpa = Number(student?.gpa);
+    if (!Number.isNaN(minGpa) && minGpa > 0 && !Number.isNaN(studentGpa) && studentGpa < minGpa) eligibility.push(`requires GPA ${minGpa}`);
+    if (s.requiredStanding && student?.academicStanding && String(s.requiredStanding) !== String(student.academicStanding)) eligibility.push(`requires ${s.requiredStanding}`);
+    return {
+      id: s.id,
+      code: s.subjectCode,
+      name: s.subjectName,
+      missingPrereqs,
+      availableThisTerm: !termMismatch,
+      eligibilityIssues: eligibility
+    };
+  });
+
+  return {
+    student: { id: studentId, name: student.fullName, curriculum: student.curriculum || "New", track: student.track },
+    curriculumSubjectsCount: required.length,
+    completedCount: completed.length,
+    pendingCount: pending.length,
+    pendingDetails,
+    currentTerm: currentTerm,
+    unitPolicy: { minUnits: unitPolicyDoc.minUnits || null, maxUnits: unitPolicyDoc.maxUnits || null }
+  };
+}

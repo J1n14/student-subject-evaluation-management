@@ -340,6 +340,8 @@ async function selectStudentForAssignment(studentId) {
       </div>
     </div>
 
+    <div id="enrollment-readiness" class="mb-3"></div>
+
     ${emptyNotice}
 
     <form id="assignment-form">
