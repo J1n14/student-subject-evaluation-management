@@ -29,6 +29,9 @@ async function initAdminEvaluations(content) {
           <form id="credit-form" class="needs-validation" novalidate>
             <div class="modal-body">
               <input type="hidden" id="creditDocId" />
+              <div class="alert alert-info small">
+                Only passing grades from <strong>1.00</strong> to <strong>3.00</strong> are accepted for credited subjects.
+              </div>
               <div class="mb-3">
                 <label class="form-label">Subject</label>
                 <select class="form-select" id="creditSubjectId" required>
@@ -41,6 +44,12 @@ async function initAdminEvaluations(content) {
                 <input type="text" class="form-control" id="creditedFrom" placeholder="e.g. GE 1102 - Mathematics in the Modern World" required />
                 <div class="invalid-feedback">Required.</div>
                 <div class="form-text" id="creditedFromHint"></div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Grade</label>
+                <input type="number" class="form-control" id="creditGrade" step="0.01" min="1" max="3" placeholder="e.g. 1.00" required />
+                <div class="invalid-feedback">Enter a passing grade between 1.00 and 3.00.</div>
+                <div class="form-text">A subject is considered passed when the grade is between 1.00 and 3.00.</div>
               </div>
               <div class="mb-3">
                 <label class="form-label">Remarks</label>
@@ -145,8 +154,8 @@ async function getCourseMatchExceptions() {
   return courseMatchExceptionsCache;
 }
 
-// Looks across the OTHER curriculum for a subject sharing this one's code,
-// and classifies the relationship so the credit form can react to it:
+// Looks across all other subjects for a matching code and classifies the
+// relationship so the credit form can react to it:
 //   "exact"    - same code AND same name -> definitely the same course.
 //                 "Credited From" isn't really needed in this case.
 //   "accepted" - code matches, name differs, but an Admin already reviewed
@@ -157,15 +166,118 @@ async function getCourseMatchExceptions() {
 //                 entry that just happens to share a code).
 //   "rejected" - code matches, name differs, and an Admin already decided
 //                 these are NOT the same course.
-//   null       - no code overlap in the other curriculum at all (typical
-//                 case for a subject brought in from an outside school).
+//   null       - no code overlap with any other subject at all.
+function normalizeCourseMatchCode(code) {
+  return String(code || "").trim().toUpperCase();
+}
+
+function findAcceptedCourseMatchByCode(subjectCode, exceptions) {
+  const code = normalizeCourseMatchCode(subjectCode);
+  if (!code) return null;
+  return exceptions.find(
+    (e) =>
+      e.status === "accepted" &&
+      (normalizeCourseMatchCode(e.oldCode) === code || normalizeCourseMatchCode(e.newCode) === code)
+  );
+}
+
+function hasTransferredSubjectCode(subjectCode) {
+  const studentCodes = splitTransferredCodes(creditTabState?.student?.transferredSubjectCodes);
+  const code = normalizeCourseMatchCode(subjectCode);
+  return studentCodes.includes(code);
+}
+
+function splitTransferredCodes(value) {
+  return String(value || "")
+    .split(/[,;\n]+/)
+    .map((c) => normalizeCourseMatchCode(c))
+    .filter(Boolean);
+}
+
+async function ensurePendingCourseMatch(subject, equivalence) {
+  if (!subject || !equivalence || equivalence.type !== "pending") return null;
+
+  const code = normalizeCourseMatchCode(subject.subjectCode);
+  if (!code || !hasTransferredSubjectCode(code)) return null;
+
+  const candidate = equivalence.match;
+  if (!candidate || normalizeCourseMatchCode(candidate.subjectCode) !== code) return null;
+
+  const [firstSubject, secondSubject] = [subject, candidate].sort((a, b) => a.id.localeCompare(b.id));
+  const docId = `${firstSubject.id}_${secondSubject.id}`;
+  const ref = db.collection("courseMatchExceptions").doc(docId);
+  const existing = await ref.get();
+  if (existing.exists) return { id: existing.id, ...existing.data() };
+
+  const data = {
+    oldSubjectId: firstSubject.id,
+    newSubjectId: secondSubject.id,
+    oldCode: firstSubject.subjectCode,
+    oldName: firstSubject.subjectName,
+    newCode: secondSubject.subjectCode,
+    newName: secondSubject.subjectName,
+    status: "pending",
+    detectedAt: serverTimestamp()
+  };
+
+  await ref.set(data);
+  courseMatchExceptionsCache = null;
+  return { id: docId, ...data };
+}
+
+function parseCreditedFromInput(raw) {
+  if (!raw) return null;
+  const text = String(raw).trim();
+  // Expect formats like "CS 121 - ACP" or "CS121 : Advanced...". Split on dash/colon.
+  const parts = text.split(/[-–—:]+/);
+  if (parts.length < 2) return null;
+  const code = parts[0].trim();
+  const name = parts.slice(1).join("-").trim();
+  if (!code) return null;
+  return { code: normalizeCourseMatchCode(code), name };
+}
+
+async function createPendingExceptionFromExternal(subject, externalCode, externalName) {
+  if (!subject || !externalCode) return null;
+  const code = normalizeCourseMatchCode(subject.subjectCode);
+  const exCode = normalizeCourseMatchCode(externalCode);
+
+  // Check existing exceptions by code pair first
+  const snap = await db.collection("courseMatchExceptions").get();
+  const existing = snap.docs.map((d) => ({ id: d.id, ...d.data() })).find((e) => {
+    return (
+      normalizeCourseMatchCode(e.oldCode) === code && normalizeCourseMatchCode(e.newCode) === exCode
+    ) || (
+      normalizeCourseMatchCode(e.oldCode) === exCode && normalizeCourseMatchCode(e.newCode) === code
+    );
+  });
+  if (existing) return existing;
+
+  // Create deterministic id for this manual external pair
+  const docId = `manual_${subject.id}_${exCode}`;
+  const ref = db.collection("courseMatchExceptions").doc(docId);
+  const data = {
+    oldSubjectId: subject.id,
+    newSubjectId: null,
+    oldCode: subject.subjectCode,
+    oldName: subject.subjectName,
+    newCode: externalCode,
+    newName: externalName || "(external)",
+    status: "pending",
+    detectedAt: serverTimestamp()
+  };
+  await ref.set(data, { merge: true });
+  courseMatchExceptionsCache = null;
+  return { id: docId, ...data };
+}
+
 function getCourseEquivalence(subject, allSubjects, exceptions) {
   if (!subject) return null;
-  const subjectCurriculum = subject.curriculum || "New";
-  const otherCurriculum = subjectCurriculum === "Old" ? "New" : "Old";
 
   const candidates = allSubjects.filter(
-    (s) => s.id !== subject.id && s.subjectCode === subject.subjectCode && (s.curriculum || "New") === otherCurriculum
+    (s) =>
+      s.id !== subject.id &&
+      normalizeCourseMatchCode(s.subjectCode) === normalizeCourseMatchCode(subject.subjectCode)
   );
   if (candidates.length === 0) return null;
 
@@ -173,9 +285,12 @@ function getCourseEquivalence(subject, allSubjects, exceptions) {
   if (exact) return { type: "exact", match: exact };
 
   for (const cand of candidates) {
-    const oldId = subjectCurriculum === "Old" ? subject.id : cand.id;
-    const newId = subjectCurriculum === "Old" ? cand.id : subject.id;
-    const exception = exceptions.find((e) => e.oldSubjectId === oldId && e.newSubjectId === newId);
+    const [firstId, secondId] = [subject.id, cand.id].sort();
+    const exception = exceptions.find(
+      (e) =>
+        (e.oldSubjectId === firstId && e.newSubjectId === secondId) ||
+        (e.oldSubjectId === secondId && e.newSubjectId === firstId)
+    );
     if (exception) return { type: exception.status, match: cand, exception };
   }
   return { type: "pending", match: candidates[0] }; // code overlap, name differs, never scanned/no exception doc yet
@@ -239,11 +354,13 @@ async function openCreditModal(creditId, preselectSubjectId) {
     select.value = existingRecord.subjectId;
     select.disabled = true;
     document.getElementById("creditedFrom").value = existingRecord.creditedFrom || "";
+    document.getElementById("creditGrade").value = existingRecord.grade ?? "";
     document.getElementById("creditRemarks").value = existingRecord.remarks || "";
     await updateCreditedFromHint({ keepValue: true });
   } else {
     select.disabled = false;
     if (preselectSubjectId) select.value = preselectSubjectId;
+    document.getElementById("creditGrade").value = "";
     await updateCreditedFromHint({ keepValue: false });
   }
 }
@@ -269,12 +386,47 @@ async function updateCreditedFromHint(opts = {}) {
 
   const [allSubjects, exceptions] = await Promise.all([getSubjectsCatalog(), getCourseMatchExceptions()]);
   const subject = allSubjects.find((s) => s.id === subjectId);
-  const equivalence = getCourseEquivalence(subject, allSubjects, exceptions);
+  const subjectCode = subject?.subjectCode || "";
+  const transferredMatch = hasTransferredSubjectCode(subjectCode);
+  const acceptedCodeMatch = findAcceptedCourseMatchByCode(subjectCode, exceptions);
+  let equivalence = getCourseEquivalence(subject, allSubjects, exceptions);
+
+  // If admin typed an external course in the Credited From field, parse it
+  const creditedFromRaw = document.getElementById("creditedFrom").value;
+  const parsed = parseCreditedFromInput(creditedFromRaw);
+  if (parsed && parsed.code === normalizeCourseMatchCode(subjectCode) && parsed.name && parsed.name !== subject.subjectName) {
+    // Create a pending exception that represents the external name vs catalog subject
+    const pending = await createPendingExceptionFromExternal(subject, parsed.code, parsed.name);
+    if (pending) {
+      courseMatchExceptionsCache = null;
+      equivalence = { type: "pending", match: equivalence?.match || null, exception: pending };
+    }
+  }
+
+  if (equivalence && equivalence.type === "pending") {
+    const pending = await ensurePendingCourseMatch(subject, equivalence);
+    if (pending) {
+      courseMatchExceptionsCache = null;
+      equivalence = { type: "pending", match: equivalence.match, exception: pending };
+    }
+  }
+
+  if (transferredMatch && acceptedCodeMatch) {
+    input.required = true;
+    hint.textContent = `This code is listed among the student's transferred subjects and has an accepted Course Match (${acceptedCodeMatch.oldCode} / ${acceptedCodeMatch.newCode}). Specify the source below.`;
+    hint.className = "form-text text-success";
+    return;
+  }
 
   if (!equivalence) {
     input.required = true;
-    hint.textContent = "";
-    hint.className = "form-text";
+    if (transferredMatch) {
+      hint.textContent = `This code is on the student's transferred list. If the external course name differs, review the match in Course Matches and accept the code before crediting it.`;
+      hint.className = "form-text text-info";
+    } else {
+      hint.textContent = "";
+      hint.className = "form-text";
+    }
     return;
   }
 
@@ -296,7 +448,7 @@ async function updateCreditedFromHint(opts = {}) {
   } else {
     // pending
     input.required = true;
-    hint.innerHTML = `⚠️ This code also exists as "${escapeHtml(equivalence.match.subjectName)}" in the other curriculum, not yet reviewed. If this is the same course carried over, ask an Admin to accept the match in <a href="admin-course-matches.html" target="_blank">Course Matches</a>. Otherwise, specify below where this was actually taken (e.g. a different school).`;
+    hint.innerHTML = `⚠️ This code also exists as "${escapeHtml(equivalence.match.subjectName)}" in the other curriculum, not yet reviewed. If this is the same course carried over, review and accept the match in <a href="admin-course-matches.html" target="_blank">Course Matches</a>, then come back to credit it. Otherwise, specify below where it was actually taken (e.g. a different school).`;
     hint.className = "form-text text-warning";
   }
 }
@@ -312,12 +464,52 @@ async function saveCreditedSubject(e) {
   btn.disabled = true;
 
   try {
+    const gradeValue = document.getElementById("creditGrade").value.trim();
+    const grade = Number(gradeValue);
+    if (!gradeValue || Number.isNaN(grade) || grade < 1 || grade > 3) {
+      showToast("Enter a valid passing grade between 1.00 and 3.00.", "error");
+      btn.disabled = false;
+      return;
+    }
+
+    const currentCreditedFrom = document.getElementById("creditedFrom").value;
+    const [allSubjects, exceptions] = await Promise.all([getSubjectsCatalog(), getCourseMatchExceptions()]);
+    const subject = allSubjects.find((s) => s.id === subjectId);
+    const equivalence = getCourseEquivalence(subject, allSubjects, exceptions);
+
+    // If the admin typed an external credited-from with same code but different name,
+    // create a pending exception and block saving until review.
+    const parsed = parseCreditedFromInput(currentCreditedFrom);
+    const acceptedCodeMatch = findAcceptedCourseMatchByCode(subject?.subjectCode, exceptions);
+    if (parsed && parsed.code === normalizeCourseMatchCode(subject?.subjectCode) && parsed.name && parsed.name !== subject.subjectName && !acceptedCodeMatch) {
+      await createPendingExceptionFromExternal(subject, parsed.code, parsed.name);
+      document.getElementById("creditedFrom").value = currentCreditedFrom;
+      showToast(
+        "This credited-from entry appears to be a same-code but different-name course. Review and accept the Course Match before crediting.",
+        "error"
+      );
+      btn.disabled = false;
+      return;
+    }
+
+    if (equivalence?.type === "pending") {
+      await ensurePendingCourseMatch(subject, equivalence);
+      document.getElementById("creditedFrom").value = currentCreditedFrom;
+      showToast(
+        "This subject has a same-code/different-name candidate. Review and accept the Course Match before crediting.",
+        "error"
+      );
+      btn.disabled = false;
+      return;
+    }
+
     const docId = `${student.id}_${subjectId}`;
     await db.collection("creditedSubjects").doc(docId).set(
       {
         studentId: student.id,
         subjectId,
         creditedFrom: document.getElementById("creditedFrom").value.trim(),
+        grade,
         remarks: document.getElementById("creditRemarks").value.trim(),
         creditedBy: auth.currentUser.email,
         creditedAt: serverTimestamp()
@@ -363,6 +555,13 @@ async function markAllCredited() {
   const rawInput = prompt('"Credited From" note to apply to all of them (e.g. old school / bulk carryover):', "Bulk credited by admin");
   if (rawInput === null) return; // admin cancelled
   const creditedFrom = rawInput.trim();
+  const rawGrade = prompt('Enter a passing grade to apply to all of them (1.00 - 3.00):', '1.00');
+  if (rawGrade === null) return;
+  const grade = Number(rawGrade);
+  if (!rawGrade.trim() || Number.isNaN(grade) || grade < 1 || grade > 3) {
+    showToast('Bulk credit cancelled. Enter a valid passing grade between 1.00 and 3.00.', 'error');
+    return;
+  }
 
   try {
     const batch = db.batch();
@@ -374,6 +573,7 @@ async function markAllCredited() {
           studentId: student.id,
           subjectId: sub.id,
           creditedFrom: creditedFrom || "Bulk credited by admin",
+          grade,
           remarks: "Marked via Mark All Credited",
           creditedBy: auth.currentUser.email,
           creditedAt: serverTimestamp()

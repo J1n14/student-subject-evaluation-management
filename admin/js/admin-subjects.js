@@ -137,6 +137,20 @@ async function initAdminSubjects(content) {
                   </select>
                 </div>
               </div>
+              <div class="row">
+                <div class="col-6 mb-3">
+                  <label class="form-label">Minimum GPA</label>
+                  <input type="number" step="0.01" min="0" max="5" class="form-control" id="minGpa" placeholder="e.g. 2.50" />
+                </div>
+                <div class="col-6 mb-3">
+                  <label class="form-label">Required Standing</label>
+                  <select class="form-select" id="requiredStanding">
+                    <option value="">None</option>
+                    <option>Good Standing</option>
+                    <option>Probation</option>
+                  </select>
+                </div>
+              </div>
             </div>
             <div class="modal-footer">
               <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -237,6 +251,8 @@ function openSubjectModal(id) {
     document.getElementById("curriculum").value = s.curriculum || "";
     document.getElementById("prerequisite").value = s.prerequisite || "";
     document.getElementById("academicYear").value = s.academicYear || "";
+    document.getElementById("minGpa").value = s.minGpa ?? "";
+    document.getElementById("requiredStanding").value = s.requiredStanding || "";
     document.getElementById("status").value = s.status || "Active";
   } else {
     document.getElementById("subjectModalTitle").textContent = "Add Subject";
@@ -263,6 +279,8 @@ async function saveSubject(e) {
       curriculum: document.getElementById("curriculum").value,
       prerequisite: document.getElementById("prerequisite").value.trim(),
       academicYear: document.getElementById("academicYear").value.trim(),
+      minGpa: document.getElementById("minGpa").value === "" ? null : Number(document.getElementById("minGpa").value),
+      requiredStanding: document.getElementById("requiredStanding").value || "",
       status: document.getElementById("status").value,
       updatedAt: serverTimestamp()
     };

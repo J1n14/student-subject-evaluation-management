@@ -7,7 +7,7 @@ async function initAdminCourseMatches(content) {
         <div>
           <h6 class="mb-1"><i class="bi bi-shuffle me-1"></i>Curriculum Course Matches</h6>
           <div class="text-muted small">
-            Subjects whose code matches between the Old and New curricula but whose name differs.
+            Subjects whose code matches across any curricula but whose name differs.
             Review each one and decide whether it's really the same course carried over, or a
             genuinely different subject that happens to reuse the code.
           </div>

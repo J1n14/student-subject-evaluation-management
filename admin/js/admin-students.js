@@ -79,6 +79,47 @@ async function initAdminStudents(content) {
                 </select>
                 <div class="form-text" id="studentTypeHelp">Choose a type to see what it means for this student's subjects.</div>
                 <div class="invalid-feedback">Select a student type.</div>
+                <div class="row mt-3" id="previousSubjectCheckWrap" style="display:none">
+                  <div class="col-md-6 mb-3">
+                    <label class="form-label">Passed all previous subjects?</label>
+                    <select class="form-select" id="passedAllPreviousSubjects">
+                      <option value="">Select</option>
+                      <option value="Yes">Yes</option>
+                      <option value="No">No</option>
+                    </select>
+                    <div class="invalid-feedback">Please confirm whether the student passed previous subjects.</div>
+                  </div>
+                  <div class="col-md-6 mb-3" id="failedSubjectsWrap" style="display:none">
+                    <label class="form-label">Failed subject codes</label>
+                    <div class="input-group mb-2">
+                      <input type="text" class="form-control" id="failedSubjectInput" placeholder="Enter a subject code and press Add" />
+                      <button type="button" class="btn btn-outline-secondary" id="addFailedSubjectBtn" onclick="addSubjectCode('failedSubjectCodes','failedSubjectInput','failedSubjectList')">Add</button>
+                    </div>
+                    <div id="failedSubjectList" class="d-flex flex-wrap gap-2"></div>
+                    <input type="hidden" id="failedSubjectCodes" />
+                    <div class="form-text">Enter subjects the student did not pass so they are not auto-credited.</div>
+                  </div>
+                </div>
+                <div class="mb-3" id="passedSubjectsWrap" style="display:none">
+                  <label class="form-label">Passed subject codes</label>
+                  <div class="input-group mb-2">
+                    <input type="text" class="form-control" id="passedSubjectInput" placeholder="Enter a subject code and press Add" />
+                    <button type="button" class="btn btn-outline-secondary" id="addPassedSubjectBtn" onclick="addSubjectCode('passedSubjectCodes','passedSubjectInput','passedSubjectList')">Add</button>
+                  </div>
+                  <div id="passedSubjectList" class="d-flex flex-wrap gap-2"></div>
+                  <input type="hidden" id="passedSubjectCodes" />
+                  <div class="form-text">Enter subjects the student already passed manually, so they can be treated as completed during evaluation.</div>
+                </div>
+                <div class="mb-3" id="transferredSubjectsWrap" style="display:none">
+                  <label class="form-label">Transferred subject/course codes</label>
+                  <div class="input-group mb-2">
+                    <input type="text" class="form-control" id="transferredSubjectInput" placeholder="Enter a subject code and press Add" />
+                    <button type="button" class="btn btn-outline-secondary" id="addTransferredSubjectBtn" onclick="addSubjectCode('transferredSubjectCodes','transferredSubjectInput','transferredSubjectList')">Add</button>
+                  </div>
+                  <div id="transferredSubjectList" class="d-flex flex-wrap gap-2"></div>
+                  <input type="hidden" id="transferredSubjectCodes" />
+                  <div class="form-text">Enter subject codes from the student's previous school where the code matches but the name may differ. These can be reviewed in Course Matches for approved crediting.</div>
+                </div>
                 <div class="alert alert-light border small mt-2 mb-0" id="studentTypeAssignNote" style="display:none">
                   <i class="bi bi-signpost-split me-1"></i><span id="studentTypeAssignNoteText"></span>
                 </div>
@@ -169,6 +210,27 @@ async function initAdminStudents(content) {
                 </div>
               </div>
 
+              <div class="row">
+                <div class="col-md-6 mb-3">
+                  <label class="form-label">GPA</label>
+                  <input type="number" step="0.01" min="0" max="5" class="form-control" id="gpa" placeholder="e.g. 3.25" />
+                </div>
+                <div class="col-md-6 mb-3">
+                  <label class="form-label">Academic Standing</label>
+                  <select class="form-select" id="academicStanding">
+                    <option value="">None</option>
+                    <option>Good Standing</option>
+                    <option>Probation</option>
+                  </select>
+                </div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Academic Hold</label>
+                <select class="form-select" id="academicHold">
+                  <option value="">No</option>
+                  <option value="Yes">Yes</option>
+                </select>
+              </div>
               <div id="statusFieldWrap" style="display:none">
                 <h6 class="text-uppercase text-muted small fw-bold mb-2 mt-1" style="letter-spacing:.05em">
                   <i class="bi bi-flag me-1"></i>Status
@@ -204,6 +266,7 @@ async function initAdminStudents(content) {
 
   document.getElementById("student-form").addEventListener("submit", saveStudent);
   document.getElementById("studentType").addEventListener("change", updateStudentTypeFields);
+  document.getElementById("passedAllPreviousSubjects").addEventListener("change", updateStudentTypeFields);
   document.getElementById("curriculum").addEventListener("change", updateTrackRequirement);
   document.getElementById("search-input").addEventListener("input", debounce(() => { studentsPage = 1; renderStudentsTable(); }, 250));
   document.getElementById("filter-track").addEventListener("change", () => { studentsPage = 1; renderStudentsTable(); });
@@ -232,6 +295,8 @@ function updateStudentTypeFields() {
   const type = document.getElementById("studentType").value;
   const needsLastYear = ["Returnee", "Transferee", "Failed"].includes(type);
   const needsPrevSchool = type === "Transferee";
+  const hasPreviousSubjectCheck = ["Regular", "Irregular", "Failed"].includes(type);
+  const hasPassedSubjectEntry = ["Irregular", "Transferee", "Returnee"].includes(type);
 
   const lastYearWrap = document.getElementById("lastSchoolYearWrap");
   const lastYearInput = document.getElementById("lastSchoolYearAttended");
@@ -245,25 +310,58 @@ function updateStudentTypeFields() {
   prevSchoolInput.required = needsPrevSchool;
   if (!needsPrevSchool) prevSchoolInput.value = "";
 
+  const previousSubjectCheckWrap = document.getElementById("previousSubjectCheckWrap");
+  const passedAllPreviousSubjects = document.getElementById("passedAllPreviousSubjects");
+  const failedSubjectsWrap = document.getElementById("failedSubjectsWrap");
+  const failedSubjectsInput = document.getElementById("failedSubjectCodes");
+
+  previousSubjectCheckWrap.style.display = hasPreviousSubjectCheck ? "flex" : "none";
+  passedAllPreviousSubjects.required = hasPreviousSubjectCheck;
+  if (!hasPreviousSubjectCheck) {
+    passedAllPreviousSubjects.value = "";
+    failedSubjectsWrap.style.display = "none";
+    failedSubjectsInput.value = "";
+  }
+
+  const showFailedSubjects = hasPreviousSubjectCheck && passedAllPreviousSubjects.value === "No";
+  failedSubjectsWrap.style.display = showFailedSubjects ? "block" : "none";
+  failedSubjectsInput.required = showFailedSubjects;
+  if (!showFailedSubjects) failedSubjectsInput.value = "";
+
+  const passedSubjectsWrap = document.getElementById("passedSubjectsWrap");
+  const passedSubjectsInput = document.getElementById("passedSubjectCodes");
+  const transferredSubjectsWrap = document.getElementById("transferredSubjectsWrap");
+  const transferredSubjectsInput = document.getElementById("transferredSubjectCodes");
+
+  passedSubjectsWrap.style.display = hasPassedSubjectEntry ? "block" : "none";
+  passedSubjectsInput.required = false;
+  if (!hasPassedSubjectEntry) passedSubjectsInput.value = "";
+
+  transferredSubjectsWrap.style.display = type === "Transferee" ? "block" : "none";
+  transferredSubjectsInput.required = type === "Transferee";
+  if (type !== "Transferee") transferredSubjectsInput.value = "";
+
   document.getElementById("studentTypeHelp").textContent =
     type === "Regular"
-      ? "Regular auto-credits all lower-year subjects."
+      ? "Regular: subjects up to the selected Year Level are auto-credited as already taken, except any failed lower-year subjects you list below."
       : type === "Transferee"
-      ? "Record where the student is coming from below."
-      : needsLastYear
-      ? "Record the last school year they attended below."
+      ? "Transferee: no subjects are auto-credited. Enter the subjects that transferred in from their previous school below."
+      : type === "Irregular"
+      ? "Irregular: no subjects are auto-credited. If the student failed any subjects, enter them below so they are not auto-credited."
+      : type === "Failed"
+      ? "Failed: no subjects are auto-credited. Enter the subject codes the student did not pass below."
+      : type === "Returnee"
+      ? "Returnee: no subjects are auto-credited. Assign only the subjects this student hasn't already taken, watching for unmet prerequisites."
       : "";
 
-  // Explains what this Student Type means for subject assignment, so the
-  // admin knows what to expect before heading to the Assign Subjects page.
   const noteWrap = document.getElementById("studentTypeAssignNote");
   const noteText = document.getElementById("studentTypeAssignNoteText");
   const notes = {
-    Regular: "Regular: subjects up to the selected Year Level are auto-credited as already taken. Assign only the current year's subjects on the Assign Subjects page.",
-    Irregular: "Irregular: no subjects are auto-credited. On the Assign Subjects page, assign whichever subjects (any year) this student still needs, respecting prerequisites.",
-    Returnee: "Returnee: no subjects are auto-credited. On the Assign Subjects page, assign only the subjects this student hasn't already taken, watching for unmet prerequisites.",
-    Transferee: "Transferee: no subjects are auto-credited. On the Assign Subjects page, assign the subjects not covered at their previous school, watching for unmet prerequisites.",
-    Failed: "Failed: no subjects are auto-credited. On the Assign Subjects page, re-assign the subject(s) not passed plus anything still outstanding."
+    Regular: "Regular: subjects up to the selected Year Level are auto-credited as already taken, except failed subjects you list below.",
+    Irregular: "Irregular: no subjects are auto-credited. Enter any failed subject codes below so the system will not credit them automatically.",
+    Returnee: "Returnee: no subjects are auto-credited. On the Assign Subjects page, assign only the subjects this student hasn't already taken.",
+    Transferee: "Transferee: no subjects are auto-credited. Enter transferred subjects below for manual review.",
+    Failed: "Failed: no subjects are auto-credited. Enter the subject codes the student did not pass below."
   };
   if (type && notes[type]) {
     noteText.textContent = notes[type];
@@ -271,6 +369,55 @@ function updateStudentTypeFields() {
   } else {
     noteWrap.style.display = "none";
   }
+}
+
+function normalizeSubjectCodes(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.map((v) => String(v).trim()).filter(Boolean);
+  return String(value)
+    .split(/[,;\n]+/)
+    .map((code) => code.trim())
+    .filter(Boolean);
+}
+
+function renderSubjectCodeChips(hiddenFieldId, listId) {
+  const hidden = document.getElementById(hiddenFieldId);
+  const list = document.getElementById(listId);
+  if (!hidden || !list) return;
+  const codes = normalizeSubjectCodes(hidden.value);
+  list.innerHTML = codes
+    .map(
+      (code) =>
+        `<span class="badge bg-secondary d-inline-flex align-items-center" style="font-size:.85rem">
+           ${escapeHtml(code)}
+           <button type="button" class="btn-close btn-close-white btn-sm ms-2" aria-label="Remove" onclick="removeSubjectCode('${hiddenFieldId}','${listId}', '${escapeHtml(code)}')"></button>
+         </span>`
+    )
+    .join("");
+}
+
+function addSubjectCode(hiddenFieldId, inputId, listId) {
+  const input = document.getElementById(inputId);
+  const hidden = document.getElementById(hiddenFieldId);
+  if (!input || !hidden) return;
+  const code = (input.value || "").trim();
+  if (!code) return;
+  const codes = normalizeSubjectCodes(hidden.value);
+  if (!codes.includes(code)) {
+    codes.push(code);
+    hidden.value = codes.join(", ");
+    renderSubjectCodeChips(hiddenFieldId, listId);
+  }
+  input.value = "";
+  input.focus();
+}
+
+function removeSubjectCode(hiddenFieldId, listId, codeToRemove) {
+  const hidden = document.getElementById(hiddenFieldId);
+  if (!hidden) return;
+  const codes = normalizeSubjectCodes(hidden.value).filter((code) => code !== codeToRemove);
+  hidden.value = codes.join(", ");
+  renderSubjectCodeChips(hiddenFieldId, listId);
 }
 
 async function loadStudents() {
@@ -377,6 +524,16 @@ function openStudentModal(id) {
     document.getElementById("academicYear").value = s.academicYear || "";
     document.getElementById("lastSchoolYearAttended").value = s.lastSchoolYearAttended || "";
     document.getElementById("previousSchool").value = s.previousSchool || "";
+    document.getElementById("passedAllPreviousSubjects").value = s.passedAllPreviousSubjects || "";
+    document.getElementById("failedSubjectCodes").value = s.failedSubjectCodes || "";
+    document.getElementById("passedSubjectCodes").value = s.passedSubjectCodes || "";
+    document.getElementById("transferredSubjectCodes").value = s.transferredSubjectCodes || "";
+    renderSubjectCodeChips("failedSubjectCodes", "failedSubjectList");
+    renderSubjectCodeChips("passedSubjectCodes", "passedSubjectList");
+    renderSubjectCodeChips("transferredSubjectCodes", "transferredSubjectList");
+    document.getElementById("gpa").value = s.gpa ?? "";
+    document.getElementById("academicStanding").value = s.academicStanding || "";
+    document.getElementById("academicHold").value = s.academicHold ? "Yes" : "";
     document.getElementById("status").value = s.status || "Pending";
     document.getElementById("statusFieldWrap").style.display = "block";
     updateStudentTypeFields();
@@ -421,6 +578,7 @@ async function autoCreditLowerYears(studentId, student) {
 
   const subjectsSnap = await db.collection("subjects").get();
   const allSubjects = subjectsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const failedCodes = new Set((student.failedSubjectCodes || "").split(",").map((c) => c.trim()).filter(Boolean));
   const lowerYear = getRequiredSubjects(student, allSubjects).filter((s) => {
     const idx = YEAR_ORDER.indexOf(s.yearLevel);
     return idx > -1 && idx < currentYearIdx;
@@ -433,7 +591,7 @@ async function autoCreditLowerYears(studentId, student) {
   // credit history and misleading the "Auto-credited N subject(s)" toast.
   const creditedSnap = await db.collection("creditedSubjects").where("studentId", "==", studentId).get();
   const alreadyCredited = new Set(creditedSnap.docs.map((d) => d.data().subjectId));
-  const toCredit = lowerYear.filter((s) => !alreadyCredited.has(s.id));
+  const toCredit = lowerYear.filter((s) => !alreadyCredited.has(s.id) && !failedCodes.has(s.subjectCode));
   if (toCredit.length === 0) return 0;
 
   const batch = db.batch();
@@ -446,6 +604,49 @@ async function autoCreditLowerYears(studentId, student) {
         subjectId: sub.id,
         creditedFrom: "Regular - completed in prior year",
         remarks: "Auto-credited (regular)",
+        creditedBy: auth.currentUser.email,
+        creditedAt: serverTimestamp()
+      },
+      { merge: true }
+    );
+  });
+  await batch.commit();
+  return toCredit.length;
+}
+
+async function autoCreditManualPassedSubjects(studentId, student) {
+  const passedCodes = normalizeSubjectCodes(student.passedSubjectCodes || "").map((code) => code.toUpperCase());
+  if (passedCodes.length === 0) return 0;
+
+  const subjectsSnap = await db.collection("subjects").get();
+  const allSubjects = subjectsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const requiredSubjects = getRequiredSubjects(student, allSubjects);
+  const requiredByCode = requiredSubjects.reduce((map, sub) => {
+    const code = (sub.subjectCode || "").trim().toUpperCase();
+    if (!code) return map;
+    if (!map.has(code)) map.set(code, []);
+    map.get(code).push(sub);
+    return map;
+  }, new Map());
+
+  const matchedSubjects = passedCodes.flatMap((code) => requiredByCode.get(code) || []);
+  if (matchedSubjects.length === 0) return 0;
+
+  const creditedSnap = await db.collection("creditedSubjects").where("studentId", "==", studentId).get();
+  const alreadyCredited = new Set(creditedSnap.docs.map((d) => d.data().subjectId));
+  const toCredit = matchedSubjects.filter((s) => !alreadyCredited.has(s.id));
+  if (toCredit.length === 0) return 0;
+
+  const batch = db.batch();
+  toCredit.forEach((sub) => {
+    const ref = db.collection("creditedSubjects").doc(`${studentId}_${sub.id}`);
+    batch.set(
+      ref,
+      {
+        studentId,
+        subjectId: sub.id,
+        creditedFrom: "Manual passed subject entry",
+        remarks: "Auto-credited from manual passed subject list",
         creditedBy: auth.currentUser.email,
         creditedAt: serverTimestamp()
       },
@@ -482,6 +683,13 @@ async function saveStudent(e) {
       yearLevel: document.getElementById("yearLevel").value,
       studentType,
       academicYear: document.getElementById("academicYear").value.trim(),
+      passedAllPreviousSubjects: document.getElementById("passedAllPreviousSubjects").value || "",
+      failedSubjectCodes: normalizeSubjectCodes(document.getElementById("failedSubjectCodes").value).join(", "),
+      passedSubjectCodes: normalizeSubjectCodes(document.getElementById("passedSubjectCodes").value).join(", "),
+      transferredSubjectCodes: normalizeSubjectCodes(document.getElementById("transferredSubjectCodes").value).join(", "),
+      gpa: document.getElementById("gpa").value === "" ? null : Number(document.getElementById("gpa").value),
+      academicStanding: document.getElementById("academicStanding").value || "",
+      academicHold: document.getElementById("academicHold").value === "Yes",
       lastSchoolYearAttended: needsLastYear ? document.getElementById("lastSchoolYearAttended").value.trim() : "",
       previousSchool: studentType === "Transferee" ? document.getElementById("previousSchool").value.trim() : "",
       updatedAt: serverTimestamp()
@@ -491,13 +699,15 @@ async function saveStudent(e) {
       data.status = document.getElementById("status").value;
       await db.collection("students").doc(editingId).update(data);
       await logActivity(`Updated student ${editingId}`);
+      const autoCreditMessages = [];
       if (data.studentType === "Regular") {
         const n = await autoCreditLowerYears(editingId, data);
-        await recomputeCreditStatus(editingId);
-        showToast(n ? `Student updated. Auto-credited ${n} lower-year subject(s).` : "Student updated.");
-      } else {
-        showToast("Student updated.");
+        if (n) autoCreditMessages.push(`auto-credited ${n} lower-year subject(s)`);
       }
+      const m = await autoCreditManualPassedSubjects(editingId, data);
+      if (m) autoCreditMessages.push(`credited ${m} manually passed subject(s)`);
+      await recomputeCreditStatus(editingId);
+      showToast(`Student updated.${autoCreditMessages.length ? ` ${autoCreditMessages.join(", ")}.` : ""}`);
     } else {
       const initialPassword = generateInitialPassword(lastName);
 
@@ -522,13 +732,15 @@ async function saveStudent(e) {
 
       await logActivity(`Added student ${data.fullName}`);
       const passwordNote = `They log in with their email and their Last Name ("${initialPassword}") as the password.`;
+      const autoCreditMessages = [];
       if (data.studentType === "Regular") {
         const n = await autoCreditLowerYears(studentId, data);
-        await recomputeCreditStatus(studentId);
-        showToast(`Student added${n ? ` and auto-credited ${n} lower-year subject(s)` : ""}. ${passwordNote}`);
-      } else {
-        showToast(`Student added. ${passwordNote}`);
+        if (n) autoCreditMessages.push(`auto-credited ${n} lower-year subject(s)`);
       }
+      const m = await autoCreditManualPassedSubjects(studentId, data);
+      if (m) autoCreditMessages.push(`credited ${m} manually passed subject(s)`);
+      await recomputeCreditStatus(studentId);
+      showToast(`Student added.${autoCreditMessages.length ? ` ${autoCreditMessages.join(", ")}.` : ""} ${passwordNote}`);
     }
 
     bootstrap.Modal.getInstance(document.getElementById("studentModal")).hide();
@@ -556,6 +768,10 @@ function viewStudent(id) {
       <dt class="col-5">Academic Year</dt><dd class="col-7">${escapeOrDash(s.academicYear)}</dd>
       <dt class="col-5">Last School Year Attended</dt><dd class="col-7">${escapeOrDash(s.lastSchoolYearAttended)}</dd>
       <dt class="col-5">Previous School</dt><dd class="col-7">${escapeOrDash(s.previousSchool)}</dd>
+      <dt class="col-5">Passed All Previous Subjects</dt><dd class="col-7">${escapeOrDash(s.passedAllPreviousSubjects)}</dd>
+      <dt class="col-5">Passed Subject Codes</dt><dd class="col-7">${escapeOrDash(s.passedSubjectCodes)}</dd>
+      <dt class="col-5">Failed Subject Codes</dt><dd class="col-7">${escapeOrDash(s.failedSubjectCodes)}</dd>
+      <dt class="col-5">Transferred Subject Codes</dt><dd class="col-7">${escapeOrDash(s.transferredSubjectCodes)}</dd>
       <dt class="col-5">Status</dt><dd class="col-7">${statusBadge(s.status || "Pending")}</dd>
       <dt class="col-5">Created At</dt><dd class="col-7">${formatDateTime(s.createdAt)}</dd>
       <dt class="col-5">Updated At</dt><dd class="col-7">${formatDateTime(s.updatedAt)}</dd>

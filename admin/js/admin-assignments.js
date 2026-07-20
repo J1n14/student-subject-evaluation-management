@@ -4,10 +4,12 @@ let currentAssignments = []; // studentSubjects docs for the selected student
 let currentCreditedMap = new Map(); // subjectId -> credited record for the selected student
 let currentDisplaySubjects = []; // required + off-plan subjects for the selected student (prereq lookup scope)
 let selectedAssignmentStudentId = null;
+let currentAssignmentStudent = null;
 
 // Admin-configurable unit load policy, stored at settings/unitPolicy.
 // Falls back to these defaults until an admin saves their own values.
 let unitPolicy = { minUnits: 15, maxUnits: 24 };
+let currentTermPolicy = { academicYear: "", semester: "" };
 
 // Fetches the saved unit policy into the in-memory `unitPolicy` var. Purely
 // a data load - no DOM involved, so it's safe to call before the assignment
@@ -104,6 +106,22 @@ async function initAdminAssignments(content) {
       <div id="selected-student-chip" class="mt-2"></div>
     </div>
 
+    <div class="section-card mb-3">
+      <label class="form-label fw-semibold mb-2"><span class="badge bg-secondary rounded-pill me-1">Policy</span>Current Term Policy</label>
+      <div class="d-flex gap-2 align-items-center">
+        <input type="text" class="form-control form-control-sm" style="max-width:160px" id="policy-academic-year" placeholder="2025-2026" />
+        <select class="form-select form-select-sm" style="max-width:160px" id="policy-semester">
+          <option value="">Select term</option>
+          <option value="1st Semester">1st Semester</option>
+          <option value="2nd Semester">2nd Semester</option>
+          <option value="Midterm">Midterm</option>
+          <option value="Summer">Summer</option>
+        </select>
+        <button type="button" class="btn btn-sm btn-outline-primary" id="term-policy-save-btn">Save term</button>
+        <div class="small text-muted ms-3">Current: <strong id="term-policy-display">not set yet</strong></div>
+      </div>
+    </div>
+
     <div class="section-card" id="assignment-section" style="display:none">
       <label class="form-label fw-semibold mb-2"><span class="badge bg-primary rounded-pill me-1">2</span>Assign Subjects</label>
       <div id="assignment-panel"></div>
@@ -117,6 +135,8 @@ async function initAdminAssignments(content) {
       if (results) results.style.display = "none";
     }
   });
+  const termSaveBtn = document.getElementById("term-policy-save-btn");
+  if (termSaveBtn) termSaveBtn.addEventListener("click", saveCurrentTermPolicyInline);
 
   // Load the FULL subject catalog (not just the current year, and not just
   // "Active") so we can match by curriculum + track and resolve prerequisites.
@@ -126,7 +146,7 @@ async function initAdminAssignments(content) {
   ]);
   assignStudents = studentsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
   assignSubjects = subjectsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  await loadUnitPolicy();
+  await Promise.all([loadUnitPolicy(), loadCurrentTermPolicy()]);
 }
 
 function renderStudentSearchResults() {
@@ -186,8 +206,91 @@ function clearSelectedAssignmentStudent() {
   input.focus();
 }
 
+async function loadCurrentTermPolicy() {
+  try {
+    const doc = await db.collection("settings").doc("currentTerm").get();
+    if (doc.exists) {
+      const d = doc.data();
+      currentTermPolicy = {
+        academicYear: d.academicYear || "",
+        semester: d.semester || ""
+      };
+    } else {
+      currentTermPolicy = { academicYear: "", semester: "" };
+    }
+  } catch (err) {
+    console.warn("Could not load current term policy, using defaults.", err);
+    currentTermPolicy = { academicYear: "", semester: "" };
+  }
+
+  const yearInput = document.getElementById("policy-academic-year");
+  const semesterInput = document.getElementById("policy-semester");
+  if (yearInput) yearInput.value = currentTermPolicy.academicYear || "";
+  if (semesterInput) semesterInput.value = currentTermPolicy.semester || "";
+
+  const display = document.getElementById("term-policy-display");
+  if (display) {
+    display.textContent = currentTermPolicy.academicYear && currentTermPolicy.semester
+      ? `Current term: ${currentTermPolicy.academicYear} • ${currentTermPolicy.semester}`
+      : "Current term: not set yet";
+  }
+}
+
+async function saveCurrentTermPolicyInline() {
+  const academicYear = (document.getElementById("policy-academic-year").value || "").trim();
+  const semester = document.getElementById("policy-semester").value;
+  if (!academicYear || !semester) {
+    showToast("Enter both the academic year and semester for the current term.", "error");
+    return;
+  }
+
+  try {
+    await db.collection("settings").doc("currentTerm").set(
+      { academicYear, semester, updatedAt: serverTimestamp(), updatedBy: auth.currentUser.email },
+      { merge: true }
+    );
+    currentTermPolicy = { academicYear, semester };
+    const display = document.getElementById("term-policy-display");
+    if (display) display.textContent = `Current term: ${academicYear} • ${semester}`;
+    showToast("Current term policy saved.");
+    if (currentAssignmentStudent) {
+      await selectStudentForAssignment(currentAssignmentStudent.id);
+    }
+  } catch (err) {
+    showError(err, "Failed to save current term policy.");
+  }
+}
+
+function getSubjectEligibilityIssues(subject, student) {
+  const issues = [];
+
+  if (currentTermPolicy.academicYear && subject.academicYear && String(subject.academicYear) !== String(currentTermPolicy.academicYear)) {
+    issues.push(`not offered in ${subject.academicYear}`);
+  }
+  if (currentTermPolicy.semester && subject.semester && String(subject.semester) !== String(currentTermPolicy.semester)) {
+    issues.push(`not offered in ${subject.semester}`);
+  }
+
+  if (student?.academicHold) {
+    issues.push("student has an academic hold");
+  }
+
+  const minGpa = Number(subject.minGpa);
+  const studentGpa = Number(student?.gpa);
+  if (!Number.isNaN(minGpa) && minGpa > 0 && !Number.isNaN(studentGpa) && studentGpa < minGpa) {
+    issues.push(`requires GPA ${minGpa} or higher`);
+  }
+
+  if (subject.requiredStanding && student?.academicStanding && String(subject.requiredStanding) !== String(student.academicStanding)) {
+    issues.push(`requires ${subject.requiredStanding}`);
+  }
+
+  return issues;
+}
+
 async function selectStudentForAssignment(studentId) {
   const student = assignStudents.find((s) => s.id === studentId);
+  currentAssignmentStudent = student;
   const panel = document.getElementById("assignment-panel");
   panel.innerHTML = `<div class="text-muted small">Loading...</div>`;
 
@@ -256,12 +359,13 @@ async function selectStudentForAssignment(studentId) {
         <span><span class="legend-dot" style="background:#3a86c8"></span>Currently assigned</span>
         <span><span class="legend-dot" style="background:#adb5bd"></span>Already credited</span>
         <span><span class="legend-dot" style="background:#e2a53a"></span>Needs prerequisite first</span>
+        <span><span class="legend-dot" style="background:#dc3545"></span>Unavailable (term/GPA/hold)</span>
       </div>
       <div class="text-muted small mb-2">
         Showing the current year by default. Choose <strong>All Years</strong> to assign back-year subjects a transferee or irregular student still needs.
       </div>
       <div id="subject-picker-container" style="max-height:460px; overflow-y:auto;" class="border rounded p-2 mb-3">
-        ${displaySubjects.length ? renderSubjectBoxGrid(displaySubjects, assignedIds, requiredIds, displaySubjects) : `<div class="text-center text-muted py-3">No subjects to display.</div>`}
+        ${displaySubjects.length ? renderSubjectBoxGrid(displaySubjects, assignedIds, requiredIds, displaySubjects, student) : `<div class="text-center text-muted py-3">No subjects to display.</div>`}
       </div>
       <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-1">
         <div class="small">
@@ -280,6 +384,7 @@ async function selectStudentForAssignment(studentId) {
         <button type="button" class="btn btn-sm btn-primary" id="unit-policy-save-btn">Save</button>
         <button type="button" class="btn btn-sm btn-outline-secondary" id="unit-policy-cancel-btn">Cancel</button>
       </div>
+      <div class="small text-muted mb-2">Edit the current term policy at the top of this page before saving assignments.</div>
       <div class="d-flex gap-2 flex-wrap">
         <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Save Assignment</button>
         <button type="button" class="btn btn-outline-success" id="assign-all-btn"><i class="bi bi-check2-all me-1"></i>Assign all still-to-take</button>
@@ -317,6 +422,7 @@ async function selectStudentForAssignment(studentId) {
   document.getElementById("unit-policy-edit-toggle").addEventListener("click", () => toggleUnitPolicyEditor(true));
   document.getElementById("unit-policy-cancel-btn").addEventListener("click", () => toggleUnitPolicyEditor(false));
   document.getElementById("unit-policy-save-btn").addEventListener("click", saveUnitPolicyInline);
+  document.getElementById("term-policy-save-btn").addEventListener("click", saveCurrentTermPolicyInline);
 
   filterSubjectPicker(); // apply the default (current-year) filter immediately
   updateSelectedUnitsTotal();
@@ -324,7 +430,7 @@ async function selectStudentForAssignment(studentId) {
 
 // ---------- Picker table rendering (grouped by Year > Semester) ----------
 
-function renderSubjectBoxGrid(displaySubjects, assignedIds, requiredIds, requiredSubjects) {
+function renderSubjectBoxGrid(displaySubjects, assignedIds, requiredIds, requiredSubjects, student) {
   const years = [...new Set(displaySubjects.map((s) => s.yearLevel))].sort(
     (a, b) => YEAR_ORDER.indexOf(a) - YEAR_ORDER.indexOf(b)
   );
@@ -343,7 +449,7 @@ function renderSubjectBoxGrid(displaySubjects, assignedIds, requiredIds, require
               <thead>
                 <tr><th></th><th>Code</th><th>Subject Name</th><th>Units</th><th>Prerequisite</th><th>Status</th></tr>
               </thead>
-              <tbody>${rows.map((sub) => renderSubjectPickerRow(sub, assignedIds, requiredIds, requiredSubjects)).join("")}</tbody>
+              <tbody>${rows.map((sub) => renderSubjectPickerRow(sub, assignedIds, requiredIds, requiredSubjects, student)).join("")}</tbody>
             </table>
           </div>
         </div>`;
@@ -358,16 +464,19 @@ function renderSubjectBoxGrid(displaySubjects, assignedIds, requiredIds, require
     .join("");
 }
 
-function renderSubjectPickerRow(sub, assignedIds, requiredIds, requiredSubjects) {
+function renderSubjectPickerRow(sub, assignedIds, requiredIds, requiredSubjects, student) {
   const isCredited = currentCreditedMap.has(sub.id);
   const isAssigned = assignedIds.has(sub.id);
   const isOffPlan = !requiredIds.has(sub.id);
   const missingPrereq = isCredited ? "" : unmetPrerequisites(sub, currentCreditedMap, requiredSubjects);
+  const eligibilityIssues = getSubjectEligibilityIssues(sub, student);
+  const ineligible = eligibilityIssues.length > 0;
 
   let stateClass = "row-available";
   if (isCredited) stateClass = "row-credited";
   else if (isOffPlan) stateClass = "row-offplan";
   else if (missingPrereq) stateClass = "row-prereq";
+  else if (ineligible) stateClass = "row-unavailable";
   else if (isAssigned) stateClass = "row-assigned";
 
   const badges = [];
@@ -376,19 +485,21 @@ function renderSubjectPickerRow(sub, assignedIds, requiredIds, requiredSubjects)
   if (isOffPlan) badges.push(`<span class="badge bg-secondary">Off-plan</span>`);
   if (missingPrereq)
     badges.push(`<span class="badge bg-warning text-dark" title="Prerequisite not yet credited"><i class="bi bi-lock-fill me-1"></i>Needs ${escapeHtml(missingPrereq)} first</span>`);
+  if (ineligible)
+    badges.push(`<span class="badge bg-danger" title="${escapeHtml(eligibilityIssues.join("; "))}"><i class="bi bi-slash-circle me-1"></i>Unavailable: ${escapeHtml(eligibilityIssues.join("; "))}</span>`);
   if (!badges.length) badges.push(`<span class="badge bg-success">Available</span>`);
 
   // Credited subjects are already completed - the checkbox is disabled but
   // keeps its current assigned state (a disabled+checked box still submits as
   // :checked, so nothing is accidentally removed on save). Subjects with an
-  // unmet prerequisite are also disabled UNLESS they're already assigned -
-  // that keeps an admin from being able to check a new prereq-blocked
-  // subject, while still letting them uncheck/remove one that was assigned
-  // before this rule existed.
+  // unmet prerequisite or eligibility issue are also disabled UNLESS they're
+  // already assigned - that keeps an admin from being able to check a new
+  // blocked subject while still letting them remove a legacy assignment.
   const prereqLocked = !!missingPrereq && !isAssigned;
+  const blocked = (prereqLocked || (ineligible && !isAssigned));
   return `
     <tr class="${stateClass}" data-subject-row data-year="${escapeHtml(sub.yearLevel)}" data-semester="${escapeHtml(sub.semester)}" data-search="${escapeHtml((sub.subjectCode + " " + sub.subjectName).toLowerCase())}">
-      <td><input class="form-check-input" type="checkbox" value="${sub.id}" ${isAssigned ? "checked" : ""} ${isCredited || prereqLocked ? "disabled" : ""} ${prereqLocked ? `title="Cannot assign - prerequisite not yet credited: ${escapeHtml(missingPrereq)}"` : ""}></td>
+      <td><input class="form-check-input" type="checkbox" value="${sub.id}" ${isAssigned ? "checked" : ""} ${isCredited || blocked ? "disabled" : ""} ${blocked ? `title="Blocked: ${escapeHtml((missingPrereq ? `prerequisite ${missingPrereq}` : "") + (missingPrereq && eligibilityIssues.length ? "; " : "") + eligibilityIssues.join("; "))}"` : ""}></td>
       <td class="subj-code-cell">${escapeHtml(sub.subjectCode)}</td>
       <td>${escapeHtml(sub.subjectName)}</td>
       <td>${escapeHtml(sub.units)}</td>
@@ -536,12 +647,23 @@ async function saveAssignments(e, studentId) {
   const blocked = toAdd
     .map((id) => assignSubjects.find((s) => s.id === id))
     .filter(Boolean)
-    .map((sub) => ({ sub, missing: unmetPrerequisites(sub, currentCreditedMap, currentDisplaySubjects) }))
-    .filter((x) => x.missing);
+    .map((sub) => ({
+      sub,
+      missing: unmetPrerequisites(sub, currentCreditedMap, currentDisplaySubjects),
+      eligibilityIssues: getSubjectEligibilityIssues(sub, currentAssignmentStudent)
+    }))
+    .filter((x) => x.missing || x.eligibilityIssues.length);
 
   if (blocked.length > 0) {
-    const list = blocked.map((x) => `${x.sub.subjectCode} (needs ${x.missing})`).join("; ");
-    showToast(`Cannot save: prerequisite(s) not yet credited - ${list}.`, "error");
+    const list = blocked
+      .map((x) => {
+        const reasons = [];
+        if (x.missing) reasons.push(`prerequisite ${x.missing}`);
+        if (x.eligibilityIssues.length) reasons.push(x.eligibilityIssues.join("; "));
+        return `${x.sub.subjectCode} (${reasons.join(" | ")})`;
+      })
+      .join("; ");
+    showToast(`Cannot save: blocked subject(s) - ${list}.`, "error");
     return;
   }
 

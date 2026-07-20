@@ -32,13 +32,12 @@ async function main() {
   const allDocs = subjectsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
   const existingById = new Map(existingExceptionsSnap.docs.map((d) => [d.id, d.data()]));
 
-  const oldSubjects = allDocs.filter((s) => s.curriculum === "Old");
-  const newSubjects = allDocs.filter((s) => s.curriculum === "New" || !s.curriculum);
-
-  const newByCode = new Map();
-  newSubjects.forEach((s) => {
-    if (!newByCode.has(s.subjectCode)) newByCode.set(s.subjectCode, []);
-    newByCode.get(s.subjectCode).push(s);
+  const groupsByCode = new Map();
+  allDocs.forEach((s) => {
+    const code = String(s.subjectCode || "").trim().toUpperCase();
+    if (!code) return;
+    if (!groupsByCode.has(code)) groupsByCode.set(code, []);
+    groupsByCode.get(code).push(s);
   });
 
   const batch = db.batch();
@@ -47,25 +46,28 @@ async function main() {
   let skippedIdentical = 0;
   let unchanged = 0;
 
-  for (const oldSub of oldSubjects) {
-    const matches = newByCode.get(oldSub.subjectCode) || [];
-    for (const newSub of matches) {
-      if (oldSub.subjectName === newSub.subjectName) {
-        skippedIdentical++;
-        continue; // identical code + name = automatic match, nothing to flag
-      }
+  for (const subjects of groupsByCode.values()) {
+    if (subjects.length <= 1) continue;
+    for (let i = 0; i < subjects.length; i++) {
+      for (let j = i + 1; j < subjects.length; j++) {
+        const oldSub = subjects[i];
+        const newSub = subjects[j];
+        if (oldSub.subjectName === newSub.subjectName) {
+          skippedIdentical++;
+          continue; // identical code + name = automatic match, nothing to flag
+        }
 
-      const exceptionId = `${oldSub.id}_${newSub.id}`;
-      const existing = existingById.get(exceptionId);
-      const ref = db.collection("courseMatchExceptions").doc(exceptionId);
-      const baseData = {
-        oldSubjectId: oldSub.id,
-        newSubjectId: newSub.id,
-        oldCode: oldSub.subjectCode,
-        oldName: oldSub.subjectName,
-        newCode: newSub.subjectCode,
-        newName: newSub.subjectName
-      };
+        const exceptionId = `${oldSub.id}_${newSub.id}`;
+        const existing = existingById.get(exceptionId);
+        const ref = db.collection("courseMatchExceptions").doc(exceptionId);
+        const baseData = {
+          oldSubjectId: oldSub.id,
+          newSubjectId: newSub.id,
+          oldCode: oldSub.subjectCode,
+          oldName: oldSub.subjectName,
+          newCode: newSub.subjectCode,
+          newName: newSub.subjectName
+        };
 
       if (!existing) {
         // First time seeing this pair.
