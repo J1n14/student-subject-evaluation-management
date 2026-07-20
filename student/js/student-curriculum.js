@@ -213,9 +213,10 @@ async function initStudentCurriculum(content, profile) {
                 if (credited) {
                   pill = `<span class="badge rounded-pill bg-success">Credited</span>`;
                 } else {
-                  // Build a temporary requiredSubjectsById map for prerequisites check
-                  const reqById = Object.fromEntries(filteredSubjects.map((sub) => [sub.id, sub]));
-                  const reason = getNotCreditedReason(s, creditedMap, reqById);
+                  // Full catalog, not just the filtered/required subjects -
+                  // a prerequisite can live in a different track/year than the
+                  // subject that needs it (same lookup scope as credit-eval-view.js).
+                  const reason = getNotCreditedReason(s, creditedMap, allSubjects);
                   const isPrereq = reason.indexOf("Requires prerequisite") === 0;
                   const isTaking = !isPrereq && assignedIds.has(s.id);
                   if (isPrereq) {

@@ -214,8 +214,10 @@ async function initStudentPOS(content, profile) {
                 statusText = `<span class="text-primary fw-semibold"><i class="bi bi-arrow-repeat me-1"></i>Enrolled / In Progress</span>`;
                 rowClass = "table-primary-light";
               } else {
-                const reqById = Object.fromEntries(requiredSubjects.map((sub) => [sub.id, sub]));
-                const reason = getNotCreditedReason(s, creditedMap, reqById);
+                // Full catalog, not just this student's required subjects -
+                // a prerequisite can live in a different track/year than the
+                // subject that needs it (same lookup scope as credit-eval-view.js).
+                const reason = getNotCreditedReason(s, creditedMap, allSubjects);
                 const isPrereq = reason.indexOf("Requires prerequisite") === 0;
                 if (isPrereq) {
                   statusText = `<span class="text-warning-emphasis small"><i class="bi bi-lock-fill me-1"></i>Prereq: ${escapeHtml(s.prerequisite)}</span>`;
