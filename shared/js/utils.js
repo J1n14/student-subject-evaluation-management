@@ -179,23 +179,49 @@ function buildCreditedMap(creditedDocs) {
   return map;
 }
 
-function getNotCreditedReason(subject, creditedMap, requiredSubjectsById) {
-  const prereqText = (subject.prerequisite || "").trim();
-  if (!prereqText) return "Not yet credited.";
-
-  // Prerequisite field may list more than one code, e.g. "IT 221, IT 222".
-  const prereqCodes = prereqText.split(",").map((c) => c.trim()).filter(Boolean);
-
-  for (const code of prereqCodes) {
-    const prereqSubject = Object.values(requiredSubjectsById).find((s) => s.subjectCode === code);
-    if (!prereqSubject) {
-      return `Not yet credited. (Prerequisite "${escapeHtml(code)}" not found in curriculum.)`;
-    }
-    if (!creditedMap.has(prereqSubject.id)) {
-      return `Requires prerequisite "${escapeHtml(prereqSubject.subjectCode)} - ${escapeHtml(prereqSubject.subjectName)}" to be completed first.`;
+// ==================== Prerequisite checking (single shared rule) ====================
+// Crediting a subject - whether it was earned at Nexus or brought in from
+// another school via the "Credited From" note on a credited-subject record
+// - never automatically credits that subject's OWN prerequisite too. The
+// prerequisite is a separate subject and still needs its own credited
+// record if the student needs it. Nothing in this codebase cascades a
+// credit from a subject to its prerequisite, by design; this helper is the
+// one place that decides "is this subject's prerequisite satisfied", reused
+// by both the Assignment page's picker and the Evaluation page's mark-
+// credited flow so the rule can't drift between the two.
+//
+// Looks up prerequisite codes against the FULL subject catalog (not just
+// subjects required by one student's curriculum/track), since a
+// transferee/irregular student's prerequisite may sit in a different
+// year/track than the subject that needs it.
+//
+// Returns an array of { code, name, id } for prerequisites NOT yet in
+// creditedMap. Empty array = fully satisfied (credited anywhere, Nexus or
+// another school - the source doesn't matter, only that a credited record
+// exists for it).
+function getUnmetPrerequisites(subject, creditedMap, allSubjectsArr) {
+  const text = (subject.prerequisite || "").trim();
+  if (!text) return [];
+  const codes = text.split(",").map((c) => c.trim()).filter(Boolean);
+  const missing = [];
+  for (const code of codes) {
+    const pre = allSubjectsArr.find((s) => s.subjectCode === code);
+    if (!pre) {
+      missing.push({ code, name: null, id: null }); // prerequisite code not found in the catalog at all
+    } else if (!creditedMap.has(pre.id)) {
+      missing.push({ code: pre.subjectCode, name: pre.subjectName, id: pre.id });
     }
   }
-  return "Not yet credited.";
+  return missing;
+}
+
+function getNotCreditedReason(subject, creditedMap, allSubjectsArr) {
+  const missing = getUnmetPrerequisites(subject, creditedMap, allSubjectsArr);
+  if (!missing.length) return "Not yet credited.";
+  const first = missing[0];
+  return first.name
+    ? `Requires prerequisite "${escapeHtml(first.code)} - ${escapeHtml(first.name)}" to be completed first.`
+    : `Not yet credited. (Prerequisite "${escapeHtml(first.code)}" not found in curriculum.)`;
 }
 
 // Graduated: every required subject (per curriculum+track) is credited.

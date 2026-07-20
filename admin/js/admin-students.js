@@ -59,10 +59,6 @@ async function initAdminStudents(content) {
           <form id="student-form" class="needs-validation" novalidate>
             <div class="modal-body">
               <input type="hidden" id="studentDocId" />
-              <div class="alert alert-light border small mb-3" id="newStudentIdNotice">
-                <i class="bi bi-info-circle me-1"></i>The student's initial login password will be their
-                <strong>Last Name</strong> (padded if shorter than 6 characters).
-              </div>
 
               <div class="mb-4 p-3 border rounded" style="background:var(--bg-soft)">
                 <label class="form-label fw-semibold mb-1">
@@ -508,9 +504,6 @@ function openStudentModal(id) {
     document.getElementById("studentModalTitle").textContent = "Edit Student";
     document.getElementById("studentDocId").value = id;
 
-    // Editing an existing student never touches their password.
-    document.getElementById("newStudentIdNotice").style.display = "none";
-
     const [fallbackFirst, ...fallbackRest] = (s.fullName || "").split(" ");
     document.getElementById("firstName").value = s.firstName || fallbackFirst || "";
     document.getElementById("lastName").value = s.lastName || fallbackRest.join(" ") || "";
@@ -540,18 +533,18 @@ function openStudentModal(id) {
     updateTrackRequirement();
   } else {
     document.getElementById("studentModalTitle").textContent = "Add Student";
-    document.getElementById("newStudentIdNotice").style.display = "block";
     updateStudentTypeFields();
     updateTrackRequirement();
   }
 }
 
-// Initial login password is the student's Last Name. Firebase requires at
-// least 6 characters, so short last names are padded deterministically.
+// Initial login password is the student's Last Name + "@Nexus", e.g. a
+// student named Dela Cruz gets "DelaCruz@Nexus". The "@Nexus" suffix also
+// guarantees Firebase's 6-character minimum is always met, so no padding
+// logic is needed even for very short last names.
 function generateInitialPassword(lastName) {
   const base = (lastName || "").replace(/\s+/g, "");
-  if (base.length >= 6) return base;
-  return (base + "000000").slice(0, 6);
+  return `${base}@Nexus`;
 }
 
 // Creates the student's login account without disturbing the Admin's own
@@ -711,7 +704,7 @@ async function saveStudent(e) {
     } else {
       const initialPassword = generateInitialPassword(lastName);
 
-      // Create the student's login account up front (email + Last Name as password).
+      // Create the student's login account up front (email + Lastname@Nexus as password).
       const uid = await createStudentAuthAccount(data.email, initialPassword);
 
       data.status = "Pending";
@@ -731,7 +724,7 @@ async function saveStudent(e) {
       });
 
       await logActivity(`Added student ${data.fullName}`);
-      const passwordNote = `They log in with their email and their Last Name ("${initialPassword}") as the password.`;
+      const passwordNote = `They log in with their email and the password "${initialPassword}".`;
       const autoCreditMessages = [];
       if (data.studentType === "Regular") {
         const n = await autoCreditLowerYears(studentId, data);

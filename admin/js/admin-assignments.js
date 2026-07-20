@@ -78,21 +78,13 @@ function sortByPlan(a, b) {
 
 // Returns a comma-separated list of prerequisite codes that are NOT yet
 // credited for this student (empty string if all prerequisites are met).
-// IMPORTANT: looks up prerequisite codes within `requiredSubjects` (the
-// student's OWN curriculum+track plan), not the whole catalog - otherwise a
-// reused subject code from a different curriculum/track can resolve to the
-// wrong subject, disagreeing with getNotCreditedReason() in utils.js which
-// is scoped the same way.
-function unmetPrerequisites(subject, creditedMap, requiredSubjects) {
-  const text = (subject.prerequisite || "").trim();
-  if (!text) return "";
-  const codes = text.split(",").map((c) => c.trim()).filter(Boolean);
-  const missing = [];
-  for (const code of codes) {
-    const pre = requiredSubjects.find((s) => s.subjectCode === code);
-    if (!pre || !creditedMap.has(pre.id)) missing.push(code);
-  }
-  return missing.join(", ");
+// Delegates to the single shared rule in shared/js/utils.js
+// (getUnmetPrerequisites) so the Assignment page and the Evaluation page's
+// mark-credited flow can never disagree about what counts as "satisfied".
+function unmetPrerequisites(subject, creditedMap) {
+  return getUnmetPrerequisites(subject, creditedMap, assignSubjects)
+    .map((m) => m.code)
+    .join(", ");
 }
 
 async function initAdminAssignments(content) {

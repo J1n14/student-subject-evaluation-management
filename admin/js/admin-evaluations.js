@@ -38,6 +38,7 @@ async function initAdminEvaluations(content) {
                   <option value="">Select subject</option>
                 </select>
                 <div class="invalid-feedback">Select a subject.</div>
+                <div class="alert alert-warning small mt-2 mb-0 py-2" id="creditPrereqNote" style="display:none"></div>
               </div>
               <div class="mb-3">
                 <label class="form-label">Credited From (old school course)</label>
@@ -451,6 +452,41 @@ async function updateCreditedFromHint(opts = {}) {
     hint.innerHTML = `⚠️ This code also exists as "${escapeHtml(equivalence.match.subjectName)}" in the other curriculum, not yet reviewed. If this is the same course carried over, review and accept the match in <a href="admin-course-matches.html" target="_blank">Course Matches</a>, then come back to credit it. Otherwise, specify below where it was actually taken (e.g. a different school).`;
     hint.className = "form-text text-warning";
   }
+
+  updateCreditPrereqNote();
+}
+
+// Crediting a subject (whether it was completed at Nexus or brought in from
+// another school, per the "Credited From" note) never automatically credits
+// that subject's OWN prerequisite - the prerequisite is a separate subject
+// and still needs its own credited record if the student needs it. This
+// just makes that rule visible at the moment an admin picks a subject to
+// credit, instead of leaving it implicit.
+function updateCreditPrereqNote() {
+  const note = document.getElementById("creditPrereqNote");
+  const subjectId = document.getElementById("creditSubjectId").value;
+  if (!subjectId || !creditTabState) {
+    note.style.display = "none";
+    return;
+  }
+
+  const subject = (subjectsCatalogCache || []).find((s) => s.id === subjectId);
+  if (!subject) {
+    note.style.display = "none";
+    return;
+  }
+
+  const missing = getUnmetPrerequisites(subject, creditTabState.creditedMap, subjectsCatalogCache || []);
+  if (!missing.length) {
+    note.style.display = "none";
+    return;
+  }
+
+  const list = missing
+    .map((m) => (m.name ? `<strong>${escapeHtml(m.code)} - ${escapeHtml(m.name)}</strong>` : `<strong>${escapeHtml(m.code)}</strong> (not found in catalog)`))
+    .join(", ");
+  note.innerHTML = `<i class="bi bi-info-circle me-1"></i>Note: ${escapeHtml(subject.subjectCode)} has its own prerequisite - ${list} - which is not yet credited. Crediting ${escapeHtml(subject.subjectCode)} here does not automatically credit it. If the student still needs it, credit or assign it separately.`;
+  note.style.display = "block";
 }
 
 async function saveCreditedSubject(e) {
@@ -593,6 +629,134 @@ async function markAllCredited() {
     await selectStudentForCreditEvaluation(student.id);
   } catch (err) {
     showError(err, "Failed to bulk-credit subjects.");
+  }
+}
+
+// Bulk-removes every credited record the selected student currently has for
+// their required subjects, in one batched write - the reverse of Mark All
+// Credited. Relies on the deterministic creditedSubjects doc ID
+// (studentId_subjectId, same convention used everywhere else this
+// collection is written), so no lookup of the record's own ID is needed.
+async function unmarkAllCredited() {
+  if (!creditTabState) return;
+  const { student, requiredSubjects, creditedMap } = creditTabState;
+  const currentlyCredited = requiredSubjects.filter((s) => creditedMap.has(s.id));
+
+  if (currentlyCredited.length === 0) {
+    showToast("Nothing credited yet for this student.", "info");
+    return;
+  }
+
+  if (!confirm(`Unmark all ${currentlyCredited.length} credited subject(s) for ${student.fullName}? This removes their credited records entirely.`)) {
+    return;
+  }
+
+  try {
+    const batch = db.batch();
+    currentlyCredited.forEach((sub) => {
+      batch.delete(db.collection("creditedSubjects").doc(`${student.id}_${sub.id}`));
+    });
+    await batch.commit();
+
+    await logActivity(`Bulk-unmarked ${currentlyCredited.length} credited subject(s) for student ${student.id}`);
+    const newStatus = await recomputeCreditStatus(student.id);
+    showToast(`Unmarked ${currentlyCredited.length} subject(s). Student status: ${newStatus}.`);
+
+    const idx = evalStudents.findIndex((s) => s.id === student.id);
+    if (idx > -1) evalStudents[idx].status = newStatus;
+
+    await selectStudentForCreditEvaluation(student.id);
+  } catch (err) {
+    showError(err, "Failed to unmark subjects.");
+  }
+}
+
+// Credits only the subjects currently ticked via the per-row selection
+// checkboxes (ignores any selected subject that's already credited).
+async function markSelectedCredited() {
+  if (!creditTabState) return;
+  const { student, requiredSubjects, creditedMap } = creditTabState;
+  const selectedIds = new Set(getEvalSelectedSubjectIds());
+  const toCredit = requiredSubjects.filter((s) => selectedIds.has(s.id) && !creditedMap.has(s.id));
+
+  if (toCredit.length === 0) {
+    showToast("None of the selected subjects need crediting.", "info");
+    return;
+  }
+
+  if (!confirm(`Mark ${toCredit.length} selected subject(s) as credited for ${student.fullName}?`)) return;
+
+  const rawInput = prompt('"Credited From" note to apply to the selected subject(s):', "Credited by admin");
+  if (rawInput === null) return; // admin cancelled
+  const creditedFrom = rawInput.trim();
+
+  try {
+    const batch = db.batch();
+    toCredit.forEach((sub) => {
+      const ref = db.collection("creditedSubjects").doc(`${student.id}_${sub.id}`);
+      batch.set(
+        ref,
+        {
+          studentId: student.id,
+          subjectId: sub.id,
+          creditedFrom: creditedFrom || "Credited by admin",
+          remarks: "Marked via selection",
+          creditedBy: auth.currentUser.email,
+          creditedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+    });
+    await batch.commit();
+
+    await logActivity(`Credited ${toCredit.length} selected subject(s) for student ${student.id}`);
+    const newStatus = await recomputeCreditStatus(student.id);
+    showToast(`Marked ${toCredit.length} selected subject(s) as credited. Student status: ${newStatus}.`);
+
+    const idx = evalStudents.findIndex((s) => s.id === student.id);
+    if (idx > -1) evalStudents[idx].status = newStatus;
+
+    clearEvalSelection();
+    await selectStudentForCreditEvaluation(student.id);
+  } catch (err) {
+    showError(err, "Failed to credit selected subjects.");
+  }
+}
+
+// Removes credited records only for the subjects currently ticked via the
+// per-row selection checkboxes (ignores any selected subject that isn't
+// credited yet).
+async function unmarkSelectedCredited() {
+  if (!creditTabState) return;
+  const { student, requiredSubjects, creditedMap } = creditTabState;
+  const selectedIds = new Set(getEvalSelectedSubjectIds());
+  const toUnmark = requiredSubjects.filter((s) => selectedIds.has(s.id) && creditedMap.has(s.id));
+
+  if (toUnmark.length === 0) {
+    showToast("None of the selected subjects are currently credited.", "info");
+    return;
+  }
+
+  if (!confirm(`Unmark ${toUnmark.length} selected subject(s) for ${student.fullName}?`)) return;
+
+  try {
+    const batch = db.batch();
+    toUnmark.forEach((sub) => {
+      batch.delete(db.collection("creditedSubjects").doc(`${student.id}_${sub.id}`));
+    });
+    await batch.commit();
+
+    await logActivity(`Unmarked ${toUnmark.length} selected subject(s) for student ${student.id}`);
+    const newStatus = await recomputeCreditStatus(student.id);
+    showToast(`Unmarked ${toUnmark.length} selected subject(s). Student status: ${newStatus}.`);
+
+    const idx = evalStudents.findIndex((s) => s.id === student.id);
+    if (idx > -1) evalStudents[idx].status = newStatus;
+
+    clearEvalSelection();
+    await selectStudentForCreditEvaluation(student.id);
+  } catch (err) {
+    showError(err, "Failed to unmark selected subjects.");
   }
 }
 

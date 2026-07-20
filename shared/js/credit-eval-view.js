@@ -20,7 +20,11 @@ function buildEvalModel(student, allSubjects, creditedDocs, assignedDocs = []) {
   const requiredById = Object.fromEntries(required.map((s) => [s.id, s]));
   const creditedMap = buildCreditedMap(creditedDocs);
   const assignedIds = new Set(assignedDocs.map((a) => a.subjectId));
-  return { required, requiredById, creditedMap, assignedIds };
+  // Keep the FULL catalog too (not just this student's curriculum/track),
+  // so prerequisite lookups can resolve a prerequisite that lives in a
+  // different track/year than the subject that needs it - the same
+  // full-catalog lookup the Assignment page's picker already relies on.
+  return { required, requiredById, creditedMap, assignedIds, allSubjects };
 }
 
 // Entry point. container: element to render into.
@@ -35,10 +39,56 @@ function renderCreditEvaluation(container, opts) {
     requiredById: model.requiredById,
     creditedMap: model.creditedMap,
     assignedIds: model.assignedIds || new Set(),
+    allSubjects: model.allSubjects,
     interactive: !!opts.interactive,
-    filter: defaultFilter
+    filter: defaultFilter,
+    selected: new Set() // subjectIds checked via the per-row selection boxes (interactive only)
   };
   _renderEvalShell();
+}
+
+// ---------- Row selection (interactive/admin view only) ----------
+// Lets an admin tick specific subjects instead of only acting on "all
+// remaining" / "all credited". markSelectedCredited()/unmarkSelectedCredited()
+// (defined in admin-evaluations.js) read the selection via
+// getEvalSelectedSubjectIds() and do the actual Firestore writes.
+
+function getEvalSelectedSubjectIds() {
+  return _evalState ? [..._evalState.selected] : [];
+}
+
+function toggleEvalRowSelection(subjectId, checked) {
+  if (!_evalState) return;
+  if (checked) _evalState.selected.add(subjectId);
+  else _evalState.selected.delete(subjectId);
+  _updateEvalSelectionBar();
+}
+
+function clearEvalSelection() {
+  if (!_evalState) return;
+  _evalState.selected.clear();
+  document.querySelectorAll('#eval-groups [data-eval-select]').forEach((cb) => (cb.checked = false));
+  _updateEvalSelectionBar();
+}
+
+function _updateEvalSelectionBar() {
+  const st = _evalState;
+  if (!st) return;
+  const ids = [...st.selected];
+  const selectedCreditedCount = ids.filter((id) => st.creditedMap.has(id)).length;
+  const selectedToTakeCount = ids.length - selectedCreditedCount;
+
+  const countEl = document.getElementById("eval-selection-count");
+  if (countEl) countEl.textContent = ids.length;
+
+  const markBtn = document.getElementById("eval-mark-selected-btn");
+  if (markBtn) markBtn.disabled = selectedToTakeCount === 0;
+
+  const unmarkBtn = document.getElementById("eval-unmark-selected-btn");
+  if (unmarkBtn) unmarkBtn.disabled = selectedCreditedCount === 0;
+
+  const clearBtn = document.getElementById("eval-clear-selection-btn");
+  if (clearBtn) clearBtn.disabled = ids.length === 0;
 }
 
 function _evalFilterOptions() {
@@ -120,7 +170,7 @@ function _renderEvalShell() {
       </div>
     </div>
 
-    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
       <div class="eval-legend small text-muted">
         <span class="legend-dot bg-success"></span>Credited &mdash; already taken
         <span class="legend-dot bg-primary ms-3"></span>Taking &mdash; currently assigned this term
@@ -128,17 +178,35 @@ function _renderEvalShell() {
         <span class="legend-dot bg-warning ms-3"></span>Needs prerequisite first
       </div>
       <div class="d-flex align-items-center gap-2">
-        ${
-          st.interactive && remaining > 0
-            ? `<button type="button" class="btn btn-sm btn-outline-success" onclick="markAllCredited()">
-                 <i class="bi bi-check2-all me-1"></i>Mark All Credited (${remaining})
-               </button>`
-            : ""
-        }
         <label class="small text-muted mb-0">View</label>
         ${filterSelect}
       </div>
     </div>
+
+    ${
+      st.interactive
+        ? `<div class="eval-bulk-bar mb-3">
+      <div class="d-flex flex-wrap align-items-center gap-2">
+        <span class="small fw-semibold text-muted">Bulk:</span>
+        <button type="button" class="btn btn-sm btn-success" onclick="markAllCredited()" ${remaining === 0 ? "disabled" : ""}>
+          <i class="bi bi-check2-all me-1"></i>Mark All Credited (${remaining})
+        </button>
+        <button type="button" class="btn btn-sm btn-danger" onclick="unmarkAllCredited()" ${creditedCount === 0 ? "disabled" : ""}>
+          <i class="bi bi-x-circle me-1"></i>Unmark All Credited (${creditedCount})
+        </button>
+        <span class="vr mx-1 d-none d-md-inline"></span>
+        <span class="small fw-semibold text-muted">Selected (<span id="eval-selection-count">0</span>):</span>
+        <button type="button" class="btn btn-sm btn-outline-success" id="eval-mark-selected-btn" onclick="markSelectedCredited()" disabled>
+          <i class="bi bi-check2 me-1"></i>Mark Credited
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-danger" id="eval-unmark-selected-btn" onclick="unmarkSelectedCredited()" disabled>
+          <i class="bi bi-x-lg me-1"></i>Unmark
+        </button>
+        <button type="button" class="btn btn-sm btn-link text-decoration-none" id="eval-clear-selection-btn" onclick="clearEvalSelection()" disabled>Clear</button>
+      </div>
+    </div>`
+        : ""
+    }
 
     <div id="eval-groups">${_renderGroups()}</div>`;
 
@@ -220,7 +288,7 @@ function _renderSubjectRow(s) {
       actions = `<button class="btn btn-sm btn-outline-danger border-0" title="Remove credit" onclick="deleteCreditedSubject('${rec.id}','${st.student.id}')"><i class="bi bi-x-lg"></i></button>`;
     }
   } else {
-    const reason = getNotCreditedReason(s, st.creditedMap, st.requiredById);
+    const reason = getNotCreditedReason(s, st.creditedMap, st.allSubjects);
     const isPrereq = reason.indexOf("Requires prerequisite") === 0;
     const isTaking = !isPrereq && st.assignedIds.has(s.id);
     if (isPrereq) {
@@ -235,8 +303,13 @@ function _renderSubjectRow(s) {
     }
   }
 
+  const checkbox = st.interactive
+    ? `<input type="checkbox" class="form-check-input flex-shrink-0" data-eval-select value="${s.id}" ${st.selected.has(s.id) ? "checked" : ""} onchange="toggleEvalRowSelection('${s.id}', this.checked)">`
+    : "";
+
   return `
     <div class="subj-row${credited ? " is-credited" : ""}">
+      ${checkbox}
       <div class="subj-main">
         <span class="subj-code">${escapeHtml(s.subjectCode)}</span>
         <span class="subj-name">${escapeHtml(s.subjectName)}</span>

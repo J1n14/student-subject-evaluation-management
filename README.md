@@ -123,14 +123,15 @@ College, Course, Curriculum, Track, Year Level, Student Type, Academic Year):
    students are just enrolled. The `students` doc key is a plain
    Firestore-generated ID under the hood, never shown or referenced in the UI.
 2. The client creates the Firebase Auth account immediately - **email** as
-   entered, and **password = the student's Last Name** (padded with zeros to
-   6 characters if their last name is shorter, since Firebase requires a
-   6-character minimum password). The exact password used is shown in the
+   entered, and **password = `Lastname@Nexus`** (e.g. a student named Dela
+   Cruz gets `DelaCruz@Nexus` - spaces in the last name are stripped, and the
+   `@Nexus` suffix always satisfies Firebase's 6-character minimum, so no
+   padding logic is needed). The exact password used is shown in the
    confirmation toast after saving so you can pass it on to the student.
 3. It then writes the `students/{autoId}` document (including the new `uid`)
    and `users/{uid}` with `role: 'student'`.
-4. The student logs in at `student-login.html` using their email and their
-   Last Name as the password.
+4. The student logs in at `student-login.html` using their email and that
+   generated password.
 
 Student Type is one of **Regular, Irregular, Returnee, Transferee, Failed**.
 Regular still auto-credits every lower-year subject in the student's plan
@@ -142,8 +143,8 @@ This uses a throwaway secondary Firebase App instance under the hood
 student's login doesn't sign the Admin out of their own session - the
 Firebase JS SDK otherwise only tracks one signed-in user per browser per app.
 
-Note: a Last Name as a password is predictable/guessable. Consider having
-students change it after first login if you add that capability later.
+Note: `Lastname@Nexus` is predictable/guessable. Consider having students
+change it after first login if you add that capability later.
 
 ## 5. Running locally
 
@@ -318,8 +319,42 @@ it is a low-cost fix.
   Background, Enrollment Details, Status) so the fields read as a clear
   top-to-bottom flow instead of a dense block of paired inputs.
 - **Evaluation page** (`shared/js/credit-eval-view.js`,
-  `admin/js/admin-evaluations.js`) now leads with an explanatory line
-  ("this is not a grade, it only tracks completion") and three summary
-  counters (Required / Credited / Still to take) above the progress bar,
-  and the year/semester filter dropdown shows semester options with a
-  visible `↳` indent instead of relying on collapsed whitespace.
+  `admin/js/admin-evaluations.js`) shows three summary counters (Required /
+  Credited / Still to take) above the progress bar, and the year/semester
+  filter dropdown shows semester options with a visible `↳` indent instead
+  of relying on collapsed whitespace.
+
+## 12. Third pass (passwords, Subjects layout, scoped Reports, prerequisite rule)
+
+- **Student password** — changed from Last Name (padded) to
+  **`Lastname@Nexus`** (see section 4). The password notice box was removed
+  from the Add Student form; the generated password is still shown in the
+  post-save confirmation toast.
+- **Subjects table** (`admin/js/admin-subjects.js`) — cut from 11 columns to
+  9 by merging Track+Curriculum and Semester+A.Y. into single two-line
+  cells, dropped the forced `text-nowrap` that was pushing the table into a
+  horizontal scrollbar, and switched to `table-layout: fixed` with the
+  Subject Name column getting a fixed 26% share (`.subjects-table` in
+  `shared/css/style.css`) so the table fits typical screen widths without
+  cutting off the last column.
+- **Reports** (`admin/js/admin-reports.js`) — added a **Student** search
+  field (same search-then-chip pattern as Assignment/Evaluations) above the
+  report type selector. Leaving it blank reports on all students, same as
+  before; picking a student scopes the Summary/Assignments/Credited-Subjects
+  report to just that person, with a visible "Scope: ..." line in the
+  report header so it's never ambiguous which one is showing.
+- **Prerequisite rule, consolidated** — crediting a subject (at Nexus or
+  brought in from another school via the "Credited From" note) never
+  automatically credits *that subject's own prerequisite*. The prerequisite
+  is a separate subject and still needs its own credited record if the
+  student needs it - this was already how the code worked (nothing
+  cascades a credit to a prerequisite), but the logic lived in two slightly
+  different copies. It's now one function, `getUnmetPrerequisites()` in
+  `shared/js/utils.js`, used by both the Assignment page's picker and the
+  Evaluation page. It also now checks prerequisites against the **full**
+  subject catalog rather than just the student's own curriculum/track, so a
+  prerequisite from a different track/year still resolves correctly for
+  transferee/irregular students. The Evaluation page's "Mark Credited"
+  modal shows an inline note when the subject being credited has an unmet
+  prerequisite of its own, so this is visible to the admin at the moment it
+  matters instead of being implicit.

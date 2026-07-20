@@ -43,8 +43,8 @@ async function initAdminSubjects(content) {
         </button>
       </div>
       <div class="table-responsive" style="max-height: calc(100vh - 260px); min-height: 300px; overflow-y: auto;">
-        <table class="table table-hover table-sm align-middle mb-0">
-          <thead class="sticky-top bg-white"><tr><th>Code</th><th>Subject Name</th><th>Units</th><th class="text-nowrap">Year</th><th class="text-nowrap text-center">Track</th><th class="text-nowrap text-center">Curriculum</th><th class="text-nowrap">Prerequisite</th><th class="text-nowrap">Semester</th><th class="text-nowrap">A.Y.</th><th>Status</th><th class="text-end sticky-col-end">Actions</th></tr></thead>
+        <table class="table table-hover table-sm align-middle mb-0 subjects-table">
+          <thead class="sticky-top bg-white"><tr><th>Code</th><th class="subj-name-col">Subject Name</th><th>Units</th><th class="text-nowrap">Year</th><th>Track / Curriculum</th><th>Prerequisite</th><th>Term</th><th>Status</th><th class="text-end sticky-col-end">Actions</th></tr></thead>
           <tbody id="subjects-tbody"></tbody>
         </table>
       </div>
@@ -205,15 +205,13 @@ function renderSubjectsTable() {
         .map(
           (s) => `
     <tr>
-      <td class="text-nowrap">${escapeHtml(s.subjectCode)}</td>
-      <td>${escapeHtml(s.subjectName)}</td>
+      <td class="text-nowrap subj-code-cell">${escapeHtml(s.subjectCode)}</td>
+      <td class="subj-name-col">${escapeHtml(s.subjectName)}</td>
       <td>${escapeHtml(s.units)}</td>
       <td class="text-nowrap">${escapeHtml(s.yearLevel)}</td>
-      <td class="text-nowrap text-center">${escapeOrDash(s.track)}</td>
-      <td class="text-nowrap text-center">${escapeOrDash(s.curriculum)}</td>
-      <td class="text-nowrap">${escapeOrDash(s.prerequisite)}</td>
-      <td class="text-nowrap">${escapeHtml(s.semester)}</td>
-      <td class="text-nowrap">${escapeHtml(s.academicYear)}</td>
+      <td>${escapeOrDash(s.track)}<div class="text-muted small">${escapeOrDash(s.curriculum)} curriculum</div></td>
+      <td>${escapeOrDash(s.prerequisite)}</td>
+      <td class="text-nowrap">${escapeHtml(s.semester)}<div class="text-muted small">${escapeOrDash(s.academicYear)}</div></td>
       <td>${statusBadge(s.status || "Active")}</td>
       <td class="text-end sticky-col-end">
         <div class="d-flex gap-1 justify-content-end flex-nowrap">
@@ -224,7 +222,7 @@ function renderSubjectsTable() {
     </tr>`
         )
         .join("")
-    : `<tr><td colspan="11" class="text-center text-muted py-4">No subjects found.</td></tr>`;
+    : `<tr><td colspan="9" class="text-center text-muted py-4">No subjects found.</td></tr>`;
 
   document.getElementById("subjects-count").textContent = `${filtered.length} subject(s)`;
 }
