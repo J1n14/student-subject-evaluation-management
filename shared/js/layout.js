@@ -16,8 +16,11 @@ const ADMIN_NAV = [
 
 const STUDENT_NAV = [
   { key: "dashboard", label: "Dashboard", href: "student-dashboard.html", icon: "bi-speedometer2" },
+  { key: "curriculum", label: "My Curriculum", href: "student-curriculum.html", icon: "bi-journal-text" },
+  { key: "pos", label: "Program of Studies", href: "student-pos.html", icon: "bi-file-earmark-text" },
   { key: "subjects", label: "My Subjects", href: "student-subjects.html", icon: "bi-journal-bookmark" },
-  { key: "evaluations", label: "My Credit Evaluation", href: "student-evaluations.html", icon: "bi-award" }
+  { key: "evaluations", label: "My Credit Evaluation", href: "student-evaluations.html", icon: "bi-award" },
+  { key: "tor", label: "My TOR", href: "student-tor.html", icon: "bi-file-earmark-ruled" }
 ];
 
 function buildSidebar(navItems, active, title) {
