@@ -10,13 +10,6 @@
  * Usage:
  *   node seed-old-curriculum.js
  */
-const { initializeApp, cert } = require("firebase-admin/app");
-const { getFirestore, FieldValue } = require("firebase-admin/firestore");
-const serviceAccount = require("./serviceAccountKey.json");
-
-initializeApp({ credential: cert(serviceAccount) });
-const db = getFirestore();
-
 const ACADEMIC_YEAR = "2025-2026";
 
 // track: "All Tracks" = shared GE/common/professional courses taken by every
@@ -114,30 +107,43 @@ const SUBJECTS = [
   { subjectCode: "IT 421", subjectName: "Internship Training", units: 6, yearLevel: "4th Year", semester: "2nd Semester", track: "All Tracks", prerequisite: "" } // prereq is standing "Regular 4th Year", not a subject code
 ];
 
-async function main() {
-  const batch = db.batch();
-  SUBJECTS.forEach((s) => {
-    const docId = `old_${s.subjectCode.replace(/\s+/g, "")}`;
-    const ref = db.collection("subjects").doc(docId);
-    batch.set(
-      ref,
-      {
-        ...s,
-        curriculum: "Old",
-        academicYear: ACADEMIC_YEAR,
-        status: "Active",
-        updatedAt: FieldValue.serverTimestamp(),
-        createdAt: FieldValue.serverTimestamp()
-      },
-      { merge: true }
-    );
+module.exports = { SUBJECTS, ACADEMIC_YEAR };
+
+// Only run as a one-time production seed when executed directly
+// (`node seed-old-curriculum.js`) - not when required by seed-emulator.js.
+if (require.main === module) {
+  const { initializeApp, cert } = require("firebase-admin/app");
+  const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+  const serviceAccount = require("./serviceAccountKey.json");
+
+  initializeApp({ credential: cert(serviceAccount) });
+  const db = getFirestore();
+
+  async function main() {
+    const batch = db.batch();
+    SUBJECTS.forEach((s) => {
+      const docId = `old_${s.subjectCode.replace(/\s+/g, "")}`;
+      const ref = db.collection("subjects").doc(docId);
+      batch.set(
+        ref,
+        {
+          ...s,
+          curriculum: "Old",
+          academicYear: ACADEMIC_YEAR,
+          status: "Active",
+          updatedAt: FieldValue.serverTimestamp(),
+          createdAt: FieldValue.serverTimestamp()
+        },
+        { merge: true }
+      );
+    });
+
+    await batch.commit();
+    console.log(`Seeded ${SUBJECTS.length} Old-curriculum subjects.`);
+  }
+
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
   });
-
-  await batch.commit();
-  console.log(`Seeded ${SUBJECTS.length} Old-curriculum subjects.`);
 }
-
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});

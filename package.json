@@ -4,7 +4,9 @@
   "description": "A static HTML/CSS/JS + Bootstrap 5 app backed by Firebase (Authentication + Cloud Firestore, with optional Storage/Hosting). No build step, no server — open the HTML files directly or deploy with Firebase Hosting.",
   "main": "admin-assignments.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "emulators": "firebase emulators:start",
+    "seed:emulator": "node firebase/seed-emulator.js"
   },
   "keywords": [],
   "author": "",

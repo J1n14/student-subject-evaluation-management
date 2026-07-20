@@ -19,13 +19,6 @@
  * Usage:
  *   node seed-new-curriculum.js
  */
-const { initializeApp, cert } = require("firebase-admin/app");
-const { getFirestore, FieldValue } = require("firebase-admin/firestore");
-const serviceAccount = require("./serviceAccountKey.json");
-
-initializeApp({ credential: cert(serviceAccount) });
-const db = getFirestore();
-
 const ACADEMIC_YEAR = "2025-2026";
 
 // This curriculum has no track split (confirmed) - every subject applies
@@ -115,7 +108,25 @@ const SUBJECTS = [
   { subjectCode: "OJT 101", subjectName: "Internship Training", units: 6, yearLevel: "4th Year", semester: "2nd Semester", prerequisite: "" }
 ];
 
-async function cascadeDelete(batch, subjectId) {
+module.exports = { SUBJECTS, TRACK, ACADEMIC_YEAR };
+
+// Only run as a one-time production seed when executed directly
+// (`node seed-new-curriculum.js`) - not when required by seed-emulator.js.
+if (require.main === module) {
+  const { initializeApp, cert } = require("firebase-admin/app");
+  const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+  const serviceAccount = require("./serviceAccountKey.json");
+
+  initializeApp({ credential: cert(serviceAccount) });
+  const db = getFirestore();
+
+  runSeed(db, FieldValue).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
+
+async function cascadeDelete(db, batch, subjectId) {
   const [assignSnap, creditSnap] = await Promise.all([
     db.collection("studentSubjects").where("subjectId", "==", subjectId).get(),
     db.collection("creditedSubjects").where("subjectId", "==", subjectId).get()
@@ -124,7 +135,7 @@ async function cascadeDelete(batch, subjectId) {
   creditSnap.forEach((d) => batch.delete(d.ref));
 }
 
-async function main() {
+async function runSeed(db, FieldValue) {
   const snap = await db.collection("subjects").get();
   const allDocs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
@@ -144,7 +155,7 @@ async function main() {
   for (const d of allDocs) {
     if (d.curriculum === "New" && !targetCodes.has(d.subjectCode)) {
       batch.delete(db.collection("subjects").doc(d.id));
-      await cascadeDelete(batch, d.id);
+      await cascadeDelete(db, batch, d.id);
       deletedWrong++;
     }
   }
@@ -173,8 +184,3 @@ async function main() {
   await batch.commit();
   console.log(`Deleted ${deletedWrong} wrongly-tagged subjects, reused ${reused} existing docs, created ${created} new ones.`);
 }
-
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});

@@ -20,6 +20,17 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 const storage = firebase.storage ? firebase.storage() : null;
 
+// When served from localhost (e.g. `firebase emulators:start`), talk to the
+// local Firestore/Auth emulators instead of production - never touches real
+// student data during development. Must run before any other db/auth calls,
+// which is why this sits immediately after they're created. See
+// firebase/seed-emulator.js for seeding the local database.
+if (["localhost", "127.0.0.1"].includes(location.hostname)) {
+  db.useEmulator("127.0.0.1", 8080);
+  auth.useEmulator("http://127.0.0.1:9099", { disableWarnings: true });
+  console.info("[dev] Connected to local Firebase emulators (Firestore :8080, Auth :9099).");
+}
+
 // NOTE: Firestore offline persistence (db.enablePersistence()) is
 // intentionally NOT enabled. It writes to IndexedDB, which on some browsers
 // contends with Firebase Auth's own IndexedDB-based session storage during a
